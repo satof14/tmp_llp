@@ -30,11 +30,16 @@ def format_elapsed_time(seconds):
     return " ".join(parts)
 
 
-def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=None):
+def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=None, bag_size=1):
     """Train for one epoch."""
     model.train()
     total_loss = 0
     num_batches = 0
+    
+    # For tracking training accuracy when bag_size=1
+    correct = 0
+    total_samples = 0
+    track_accuracy = (bag_size == 1)
     
     pbar = tqdm(dataloader, desc=f'Epoch {epoch}')
     for batch_idx, (images, proportions) in enumerate(pbar):
@@ -48,6 +53,13 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
         # Proportion loss (KLDivLoss expects log probabilities as input)
         loss = criterion(log_predictions, proportions)
         
+        # Calculate training accuracy for bag_size=1 (where proportions are one-hot)
+        if track_accuracy:
+            predictions = torch.argmax(logits, dim=1)
+            true_labels = torch.argmax(proportions, dim=1)
+            correct += (predictions == true_labels).sum().item()
+            total_samples += true_labels.size(0)
+        
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
@@ -58,7 +70,11 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
         num_batches += 1
         
         # Update progress bar
-        pbar.set_postfix({'loss': f'{loss.item():.4f}'})
+        if track_accuracy:
+            current_acc = correct / total_samples * 100
+            pbar.set_postfix({'loss': f'{loss.item():.4f}', 'acc': f'{current_acc:.2f}%'})
+        else:
+            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
         
         # Log to tensorboard
         if writer is not None:
@@ -66,7 +82,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
             writer.add_scalar('Train/Loss', loss.item(), global_step)
     
     avg_loss = total_loss / num_batches
-    return avg_loss
+    train_accuracy = correct / total_samples if track_accuracy and total_samples > 0 else None
+    return avg_loss, train_accuracy
 
 
 def evaluate(model, dataloader, device):
@@ -144,12 +161,29 @@ def train(config, log_dir=None):
     # Training loop
     best_accuracy = 0
     best_epoch = 0
+    best_train_accuracy = 0
+    best_train_accuracy_epoch = 0
+    track_train_accuracy = (config['bag_size'] == 1)
+    
     for epoch in range(config['epochs']):
         # Train
-        avg_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch, writer)
+        avg_loss, train_accuracy = train_epoch(model, train_loader, optimizer, criterion, device, epoch, writer, config['bag_size'])
         current_lr = scheduler.get_last_lr()[0]
         elapsed_time = time.time() - start_time
-        print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
+        
+        # Print training info
+        if track_train_accuracy and train_accuracy is not None:
+            # Track best training accuracy
+            if train_accuracy > best_train_accuracy:
+                best_train_accuracy = train_accuracy
+                best_train_accuracy_epoch = epoch
+            
+            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, Best Train Accuracy: {best_train_accuracy:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
+                
+            # Log train accuracy to tensorboard
+            writer.add_scalar('Train/Accuracy', train_accuracy, epoch)
+        else:
+            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
         
         # Evaluate
         if (epoch + 1) % config['eval_interval'] == 0:
@@ -180,7 +214,12 @@ def train(config, log_dir=None):
     
     writer.close()
     total_time = time.time() - start_time
-    print(f'Training completed. Best accuracy: {best_accuracy:.4f}')
+    print(f'Training completed. Best validation accuracy: {best_accuracy:.4f}')
+    
+    # Print training accuracy metrics when bag_size=1
+    if track_train_accuracy:
+        print(f'Best train accuracy: {best_train_accuracy:.4f} (achieved at epoch {best_train_accuracy_epoch+1})')
+    
     print(f'Total training time: {format_elapsed_time(total_time)}')
     
     return model, best_accuracy
