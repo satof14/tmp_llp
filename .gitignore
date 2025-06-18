@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# IDE/editor settings
+.vscode/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Wandb
+wandb/
+
+# Project specific
+data/
