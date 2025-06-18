@@ -96,6 +96,26 @@ class TransformerBlock(nn.Module):
             nn.Dropout(dropout)
         )
         
+        # Pre-computed local attention masks for different configurations
+        self.local_masks = {}
+    
+    def _get_or_create_local_mask(self, num_images, num_patches_per_image, device):
+        """Get or create a pre-computed local attention mask."""
+        key = (num_images, num_patches_per_image, device)
+        
+        if key not in self.local_masks:
+            total_patches = num_images * num_patches_per_image
+            mask = torch.zeros(total_patches, total_patches, device=device)
+            
+            for i in range(num_images):
+                start_idx = i * num_patches_per_image
+                end_idx = (i + 1) * num_patches_per_image
+                mask[start_idx:end_idx, start_idx:end_idx] = 1
+            
+            self.local_masks[key] = mask
+        
+        return self.local_masks[key]
+        
     def forward(self, x, num_patches_per_image):
         # Global attention across all tokens
         x = x + self.global_attn(self.norm1(x))
@@ -105,14 +125,12 @@ class TransformerBlock(nn.Module):
         bag_cls_token = x[:, 0:1, :]  # (B, 1, C)
         patch_tokens = x[:, 1:, :]  # (B, N-1, C)
         
-        # Create mask for local attention
+        # Get pre-computed local attention mask
         num_images = (N - 1) // num_patches_per_image
-        local_mask = torch.zeros(B, num_images * num_patches_per_image, num_images * num_patches_per_image, device=x.device)
+        local_mask = self._get_or_create_local_mask(num_images, num_patches_per_image, x.device)
         
-        for i in range(num_images):
-            start_idx = i * num_patches_per_image
-            end_idx = (i + 1) * num_patches_per_image
-            local_mask[:, start_idx:end_idx, start_idx:end_idx] = 1
+        # Expand mask for batch dimension
+        local_mask = local_mask.unsqueeze(0).expand(B, -1, -1)
         
         # Apply local attention
         patch_tokens = patch_tokens + self.local_attn(self.norm2(patch_tokens), mask=local_mask)
