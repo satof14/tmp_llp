@@ -178,12 +178,12 @@ def train(config, log_dir=None):
                 best_train_accuracy = train_accuracy
                 best_train_accuracy_epoch = epoch
             
-            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, Best Train Accuracy: {best_train_accuracy:.4f} (Epoch {best_train_accuracy_epoch+1}), LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
+            print(f'Epoch {epoch}/{config["epochs"]-1}, Average Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, Best Train Accuracy: {best_train_accuracy:.4f} (Epoch {best_train_accuracy_epoch}), LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
                 
             # Log train accuracy to tensorboard
             writer.add_scalar('Train/Accuracy', train_accuracy, epoch)
         else:
-            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
+            print(f'Epoch {epoch}/{config["epochs"]-1}, Average Loss: {avg_loss:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
         
         # Evaluate
         if (epoch + 1) % config['eval_interval'] == 0:
@@ -203,7 +203,7 @@ def train(config, log_dir=None):
                 print(f'Saved best model with accuracy: {accuracy:.4f}')
             
             elapsed_time = time.time() - start_time
-            print(f'Validation Accuracy: {accuracy:.4f} | Best: {best_accuracy:.4f} (Epoch {best_epoch+1}) | Elapsed: {format_elapsed_time(elapsed_time)}')
+            print(f'Validation Accuracy: {accuracy:.4f} | Best: {best_accuracy:.4f} (Epoch {best_epoch}) | Elapsed: {format_elapsed_time(elapsed_time)}')
             
             # Log to tensorboard
             writer.add_scalar('Val/Accuracy', accuracy, epoch)
@@ -218,7 +218,7 @@ def train(config, log_dir=None):
     
     # Print training accuracy metrics when bag_size=1
     if track_train_accuracy:
-        print(f'Best train accuracy: {best_train_accuracy:.4f} (achieved at epoch {best_train_accuracy_epoch+1})')
+        print(f'Best train accuracy: {best_train_accuracy:.4f} (achieved at epoch {best_train_accuracy_epoch})')
     
     print(f'Total training time: {format_elapsed_time(total_time)}')
     
