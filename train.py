@@ -178,7 +178,7 @@ def train(config, log_dir=None):
                 best_train_accuracy = train_accuracy
                 best_train_accuracy_epoch = epoch
             
-            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, Best Train Accuracy: {best_train_accuracy:.4f}, LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
+            print(f'Epoch {epoch+1}/{config["epochs"]}, Average Loss: {avg_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, Best Train Accuracy: {best_train_accuracy:.4f} (Epoch {best_train_accuracy_epoch+1}), LR: {current_lr:.2e}, Elapsed: {format_elapsed_time(elapsed_time)}')
                 
             # Log train accuracy to tensorboard
             writer.add_scalar('Train/Accuracy', train_accuracy, epoch)
