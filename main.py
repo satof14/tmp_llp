@@ -79,6 +79,19 @@ def main():
     parser.add_argument('--grad_clip', type=float, default=None,
                         help='Gradient clipping max norm (default: None, no clipping)')
     
+    # Optimizer arguments
+    parser.add_argument('--optimizer', type=str, default='adamw',
+                        choices=['adam', 'adamw', 'sgd'],
+                        help='Optimizer type (default: adamw)')
+    parser.add_argument('--momentum', type=float, default=0.9,
+                        help='Momentum for SGD optimizer (default: 0.9)')
+    parser.add_argument('--beta1', type=float, default=0.9,
+                        help='Beta1 for Adam/AdamW optimizer (default: 0.9)')
+    parser.add_argument('--beta2', type=float, default=0.999,
+                        help='Beta2 for Adam/AdamW optimizer (default: 0.999)')
+    parser.add_argument('--eps', type=float, default=1e-8,
+                        help='Epsilon for optimizer (default: 1e-8)')
+    
     # Other arguments
     parser.add_argument('--num_classes', type=int, default=10,
                         help='Number of classes (default: 10 for CIFAR-10)')
@@ -113,7 +126,12 @@ def main():
         'eval_interval': args.eval_interval,
         'grad_clip': args.grad_clip,
         'data_root': args.data_root,
-        'seed': args.seed
+        'seed': args.seed,
+        'optimizer': args.optimizer,
+        'momentum': args.momentum,
+        'beta1': args.beta1,
+        'beta2': args.beta2,
+        'eps': args.eps
     }
     
     if args.mode == 'train':

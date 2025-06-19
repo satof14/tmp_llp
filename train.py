@@ -11,6 +11,42 @@ from model import LLPAttentionModel
 from dataset import get_bag_dataloader, get_single_image_dataloader
 
 
+def build_optimizer(model, config):
+    """Build optimizer based on configuration."""
+    optimizer_type = config['optimizer'].lower()
+    lr = config['learning_rate']
+    weight_decay = config['weight_decay']
+    
+    if optimizer_type == 'adam':
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=lr,
+            betas=(config.get('beta1', 0.9), config.get('beta2', 0.999)),
+            eps=config.get('eps', 1e-8),
+            weight_decay=weight_decay
+        )
+    elif optimizer_type == 'adamw':
+        optimizer = optim.AdamW(
+            model.parameters(),
+            lr=lr,
+            betas=(config.get('beta1', 0.9), config.get('beta2', 0.999)),
+            eps=config.get('eps', 1e-8),
+            weight_decay=weight_decay
+        )
+    elif optimizer_type == 'sgd':
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=lr,
+            momentum=config.get('momentum', 0.9),
+            weight_decay=weight_decay
+        )
+    else:
+        raise ValueError(f"Unknown optimizer type: {optimizer_type}")
+    
+    print(f"Using {optimizer_type.upper()} optimizer with lr={lr}")
+    return optimizer
+
+
 def format_elapsed_time(seconds):
     """Format elapsed time in days, hours, minutes, seconds."""
     days = int(seconds // 86400)
@@ -132,7 +168,7 @@ def train(config, log_dir=None):
         embed_dim=config['embed_dim'],
         num_heads=config['num_heads'],
         num_layers=config['L'],
-        mlp_ratio=config['mlp_ratio'],
+        mlp_ratio=config.get('mlp_ratio', 4.0),
         dropout=config['dropout']
     ).to(device)
     
@@ -153,7 +189,7 @@ def train(config, log_dir=None):
     )
     
     # Create optimizer and loss function
-    optimizer = optim.AdamW(model.parameters(), lr=config['learning_rate'], weight_decay=config['weight_decay'])
+    optimizer = build_optimizer(model, config)
     criterion = nn.KLDivLoss(reduction='batchmean')
     
     # Create scheduler
