@@ -93,8 +93,10 @@ def main():
                         help='Epsilon for optimizer (default: 1e-8)')
     
     # Other arguments
-    parser.add_argument('--num_classes', type=int, default=10,
-                        help='Number of classes (default: 10 for CIFAR-10)')
+    parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'mifcm_3classes_newgate'],
+                        help='Dataset to use (default: cifar10)')
+    parser.add_argument('--num_classes', type=int, default=None,
+                        help='Number of classes (auto-detected based on dataset if not specified)')
     parser.add_argument('--data_root', type=str, default='./data',
                         help='Root directory for datasets (default: ./data)')
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'eval'],
@@ -110,8 +112,16 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     
+    # Auto-detect num_classes if not specified
+    if args.num_classes is None:
+        if args.dataset == 'mifcm_3classes_newgate':
+            args.num_classes = 3
+        else:  # cifar10
+            args.num_classes = 10
+    
     # Create config dictionary
     config = {
+        'dataset': args.dataset,
         'patch_size': args.patch_size,
         'embed_dim': args.embed_dim,
         'num_heads': args.num_heads,

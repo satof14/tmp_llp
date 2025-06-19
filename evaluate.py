@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from model import LLPAttentionModel
-from dataset import get_single_image_dataloader
+from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader
 
 
 def evaluate_model(model_path, config=None, device=None):
@@ -25,8 +25,9 @@ def evaluate_model(model_path, config=None, device=None):
         config = checkpoint['config']
     
     # Create model
+    img_size = 64 if config.get('dataset') == 'mifcm_3classes_newgate' else 32
     model = LLPAttentionModel(
-        img_size=32,
+        img_size=img_size,
         patch_size=config['patch_size'],
         in_channels=3,
         num_classes=config['num_classes'],
@@ -42,12 +43,20 @@ def evaluate_model(model_path, config=None, device=None):
     model.eval()
     
     # Create test dataloader
-    test_loader = get_single_image_dataloader(
-        root=config['data_root'],
-        train=False,
-        batch_size=100,
-        shuffle=False
-    )
+    if config.get('dataset') == 'mifcm_3classes_newgate':
+        test_loader = get_mifcm_single_image_dataloader(
+            root=config['data_root'],
+            train=False,
+            batch_size=100,
+            shuffle=False
+        )
+    else:
+        test_loader = get_single_image_dataloader(
+            root=config['data_root'],
+            train=False,
+            batch_size=100,
+            shuffle=False
+        )
     
     # Evaluate
     all_predictions = []
@@ -78,8 +87,12 @@ def evaluate_model(model_path, config=None, device=None):
     print(f'\nTest Accuracy: {accuracy:.4f}')
     
     # Classification report
-    class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
-                   'dog', 'frog', 'horse', 'ship', 'truck']
+    if config.get('dataset') == 'mifcm_3classes_newgate':
+        class_names = ['G1', 'S', 'G2']
+    else:
+        class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
+                       'dog', 'frog', 'horse', 'ship', 'truck']
+    
     print('\nClassification Report:')
     print(classification_report(all_labels, all_predictions, 
                               target_names=class_names, digits=4))
