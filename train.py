@@ -128,7 +128,7 @@ def train(config, log_dir=None):
         num_heads=config['num_heads'],
         num_layers=config['L'],
         mlp_ratio=4.0,
-        dropout=0.1
+        dropout=config['dropout']
     ).to(device)
     
     # Create dataloaders
@@ -146,7 +146,7 @@ def train(config, log_dir=None):
     )
     
     # Create optimizer and loss function
-    optimizer = optim.AdamW(model.parameters(), lr=config['learning_rate'], weight_decay=0.01)
+    optimizer = optim.AdamW(model.parameters(), lr=config['learning_rate'], weight_decay=config['weight_decay'])
     criterion = nn.KLDivLoss(reduction='batchmean')
     
     # Create scheduler

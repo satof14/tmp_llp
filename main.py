@@ -70,6 +70,10 @@ def main():
                         help='Number of training epochs (default: 100)')
     parser.add_argument('--learning_rate', type=float, default=1e-4,
                         help='Learning rate (default: 1e-4)')
+    parser.add_argument('--weight_decay', type=float, default=0.01,
+                        help='Weight decay for AdamW optimizer (default: 0.01)')
+    parser.add_argument('--dropout', type=float, default=0.1,
+                        help='Dropout rate (default: 0.1)')
     parser.add_argument('--eval_interval', type=int, default=1,
                         help='Evaluation interval in epochs (default: 1)')
     
@@ -102,6 +106,8 @@ def main():
         'num_classes': args.num_classes,
         'epochs': args.epochs,
         'learning_rate': args.learning_rate,
+        'weight_decay': args.weight_decay,
+        'dropout': args.dropout,
         'eval_interval': args.eval_interval,
         'data_root': args.data_root,
         'seed': args.seed
