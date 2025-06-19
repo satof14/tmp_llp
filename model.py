@@ -4,8 +4,60 @@ import torch.nn.functional as F
 import math
 
 
+class ConvolutionalTokenizer(nn.Module):
+    """Convert image to patch embeddings using Convolutional layers."""
+    
+    def __init__(self, img_size=32, in_channels=3, embed_dim=768, 
+                 conv_layers=2, kernel_size=3, stride=1, padding=1, 
+                 pool_kernel=2, pool_stride=2):
+        super().__init__()
+        self.img_size = img_size
+        self.embed_dim = embed_dim
+        self.conv_layers = conv_layers
+        
+        # Build convolutional tokenizer
+        layers = []
+        current_channels = in_channels
+        current_size = img_size
+        
+        for i in range(conv_layers):
+            # Convolutional layer
+            layers.append(nn.Conv2d(current_channels, embed_dim if i == conv_layers-1 else embed_dim//2, 
+                                   kernel_size=kernel_size, stride=stride, padding=padding))
+            layers.append(nn.ReLU(inplace=True))
+            
+            # Max pooling (except for the last layer to preserve more spatial information)
+            if i < conv_layers - 1:
+                layers.append(nn.MaxPool2d(kernel_size=pool_kernel, stride=pool_stride))
+                current_size = current_size // pool_stride
+                current_channels = embed_dim // 2
+            else:
+                # Final max pooling with smaller stride to get appropriate token size
+                layers.append(nn.MaxPool2d(kernel_size=pool_kernel, stride=pool_stride))
+                current_size = current_size // pool_stride
+        
+        self.tokenizer = nn.Sequential(*layers)
+        
+        # Calculate final spatial dimensions
+        self.final_size = current_size
+        self.num_patches = current_size ** 2
+        
+    def forward(self, x):
+        # x: (batch_size, channels, height, width)
+        B, C, H, W = x.shape
+        
+        # Apply convolutional tokenizer
+        x = self.tokenizer(x)  # (B, embed_dim, final_size, final_size)
+        
+        # Reshape to sequence format
+        x = x.flatten(2).contiguous()  # (B, embed_dim, num_patches)
+        x = x.transpose(1, 2).contiguous()  # (B, num_patches, embed_dim)
+        
+        return x
+
+
 class PatchEmbedding(nn.Module):
-    """Convert image to patch embeddings using Linear Projection."""
+    """Convert image to patch embeddings using Linear Projection (Legacy)."""
     
     def __init__(self, img_size=32, patch_size=4, in_channels=3, embed_dim=768):
         super().__init__()
@@ -148,17 +200,32 @@ class LLPAttentionModel(nn.Module):
     """Learning From Label Proportions with Attention model."""
     
     def __init__(self, img_size=32, patch_size=4, in_channels=3, num_classes=10,
-                 embed_dim=768, num_heads=12, num_layers=12, mlp_ratio=4.0, dropout=0.1):
+                 embed_dim=768, num_heads=12, num_layers=12, mlp_ratio=4.0, dropout=0.1,
+                 use_conv_tokenizer=True, conv_layers=2, kernel_size=3):
         super().__init__()
         
-        self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+        if use_conv_tokenizer:
+            self.patch_embed = ConvolutionalTokenizer(
+                img_size=img_size, 
+                in_channels=in_channels, 
+                embed_dim=embed_dim,
+                conv_layers=conv_layers,
+                kernel_size=kernel_size
+            )
+        else:
+            self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+        
         self.num_patches = self.patch_embed.num_patches
         
         # BAG_CLS token
         self.bag_cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         
-        # Positional embeddings
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
+        # Positional embeddings (optional for convolutional tokenizer)
+        self.use_pos_embed = not use_conv_tokenizer  # Disable for conv tokenizer by default
+        if self.use_pos_embed:
+            self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
+        else:
+            self.register_parameter('pos_embed', None)
         self.pos_drop = nn.Dropout(dropout)
         
         # Transformer blocks
@@ -174,7 +241,8 @@ class LLPAttentionModel(nn.Module):
         
         # Initialize weights
         nn.init.trunc_normal_(self.bag_cls_token, std=0.02)
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        if self.use_pos_embed:
+            nn.init.trunc_normal_(self.pos_embed, std=0.02)
         self.apply(self._init_weights)
         
     def _init_weights(self, m):
@@ -197,17 +265,18 @@ class LLPAttentionModel(nn.Module):
         x = self.patch_embed(x)  # (B * num_images, num_patches, embed_dim)
         
         # Reshape back
-        x = x.view(B, num_images * self.num_patches, -1)
+        x = x.reshape(B, num_images * self.num_patches, -1)
         
         # Add BAG_CLS token
         bag_cls_tokens = self.bag_cls_token.expand(B, -1, -1)
         x = torch.cat([bag_cls_tokens, x], dim=1)  # (B, 1 + num_images * num_patches, embed_dim)
         
-        # Add positional embeddings
-        # For simplicity, we tile the positional embeddings for each image
-        pos_embed = self.pos_embed[:, 1:, :].repeat(1, num_images, 1)
-        pos_embed = torch.cat([self.pos_embed[:, :1, :], pos_embed], dim=1)
-        x = x + pos_embed
+        # Add positional embeddings (if enabled)
+        if self.use_pos_embed:
+            # For simplicity, we tile the positional embeddings for each image
+            pos_embed = self.pos_embed[:, 1:, :].repeat(1, num_images, 1)
+            pos_embed = torch.cat([self.pos_embed[:, :1, :], pos_embed], dim=1)
+            x = x + pos_embed
         x = self.pos_drop(x)
         
         # Apply transformer blocks
