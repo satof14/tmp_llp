@@ -33,7 +33,7 @@ def evaluate_model(model_path, config=None, device=None):
         embed_dim=config['embed_dim'],
         num_heads=config['num_heads'],
         num_layers=config['L'],
-        mlp_ratio=4.0,
+        mlp_ratio=config['mlp_ratio'],
         dropout=0.1
     ).to(device)
     

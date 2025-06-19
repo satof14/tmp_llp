@@ -132,7 +132,7 @@ def train(config, log_dir=None):
         embed_dim=config['embed_dim'],
         num_heads=config['num_heads'],
         num_layers=config['L'],
-        mlp_ratio=4.0,
+        mlp_ratio=config['mlp_ratio'],
         dropout=config['dropout']
     ).to(device)
     
@@ -247,7 +247,9 @@ if __name__ == '__main__':
         'eval_interval': 5,
         'data_root': './data',
         'dropout': 0.1,
-        'weight_decay': 0.01
+        'weight_decay': 0.01,
+        'mlp_ratio': 4.0,
+        'grad_clip': None
     }
     
     train(config)
