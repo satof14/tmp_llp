@@ -133,6 +133,7 @@ def train(config, log_dir=None):
     
     # Create dataloaders
     train_loader = get_bag_dataloader(
+        root=config['data_root'],
         train=True,
         bag_size=config['bag_size'],
         batch_size=config['mini_batch_size'],
@@ -140,6 +141,7 @@ def train(config, log_dir=None):
     )
     
     val_loader = get_single_image_dataloader(
+        root=config['data_root'],
         train=False,
         batch_size=100,
         shuffle=False
@@ -237,7 +239,10 @@ if __name__ == '__main__':
         'num_classes': 10,
         'epochs': 100,
         'learning_rate': 1e-4,
-        'eval_interval': 5
+        'eval_interval': 5,
+        'data_root': './data',
+        'dropout': 0.1,
+        'weight_decay': 0.01
     }
     
     train(config)

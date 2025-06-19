@@ -43,6 +43,7 @@ def evaluate_model(model_path, config=None, device=None):
     
     # Create test dataloader
     test_loader = get_single_image_dataloader(
+        root=config['data_root'],
         train=False,
         batch_size=100,
         shuffle=False
