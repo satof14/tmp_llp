@@ -76,6 +76,8 @@ def main():
                         help='Dropout rate (default: 0.1)')
     parser.add_argument('--eval_interval', type=int, default=1,
                         help='Evaluation interval in epochs (default: 1)')
+    parser.add_argument('--grad_clip', type=float, default=None,
+                        help='Gradient clipping max norm (default: None, no clipping)')
     
     # Other arguments
     parser.add_argument('--num_classes', type=int, default=10,
@@ -109,6 +111,7 @@ def main():
         'weight_decay': args.weight_decay,
         'dropout': args.dropout,
         'eval_interval': args.eval_interval,
+        'grad_clip': args.grad_clip,
         'data_root': args.data_root,
         'seed': args.seed
     }

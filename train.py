@@ -30,7 +30,7 @@ def format_elapsed_time(seconds):
     return " ".join(parts)
 
 
-def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=None, bag_size=1):
+def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=None, bag_size=1, grad_clip=None):
     """Train for one epoch."""
     model.train()
     total_loss = 0
@@ -63,6 +63,11 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
         # Backward pass
         optimizer.zero_grad()
         loss.backward()
+        
+        # Gradient clipping
+        if grad_clip is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        
         optimizer.step()
         
         # Update metrics
@@ -169,7 +174,7 @@ def train(config, log_dir=None):
     
     for epoch in range(config['epochs']):
         # Train
-        avg_loss, train_accuracy = train_epoch(model, train_loader, optimizer, criterion, device, epoch, writer, config['bag_size'])
+        avg_loss, train_accuracy = train_epoch(model, train_loader, optimizer, criterion, device, epoch, writer, config['bag_size'], config['grad_clip'])
         current_lr = scheduler.get_last_lr()[0]
         elapsed_time = time.time() - start_time
         
