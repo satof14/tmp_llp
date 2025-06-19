@@ -188,6 +188,14 @@ def train(config, log_dir=None):
         shuffle=False
     )
     
+    # Create train instance-level dataloader for train accuracy evaluation
+    train_instance_loader = get_single_image_dataloader(
+        root=config['data_root'],
+        train=True,
+        batch_size=100,
+        shuffle=False
+    )
+    
     # Create optimizer and loss function
     optimizer = build_optimizer(model, config)
     criterion = nn.KLDivLoss(reduction='batchmean')
@@ -206,6 +214,8 @@ def train(config, log_dir=None):
     best_epoch = 0
     best_train_accuracy = 0
     best_train_accuracy_epoch = 0
+    best_train_instance_accuracy = 0
+    best_train_instance_epoch = 0
     track_train_accuracy = (config['bag_size'] == 1)
     
     for epoch in range(config['epochs']):
@@ -230,7 +240,16 @@ def train(config, log_dir=None):
         
         # Evaluate
         if (epoch + 1) % config['eval_interval'] == 0:
+            # Evaluate on validation set
             accuracy = evaluate(model, val_loader, device)
+            
+            # Evaluate on training set (instance-level)
+            train_instance_accuracy = evaluate(model, train_instance_loader, device)
+            
+            # Track best train instance accuracy
+            if train_instance_accuracy > best_train_instance_accuracy:
+                best_train_instance_accuracy = train_instance_accuracy
+                best_train_instance_epoch = epoch
             
             # Save best model
             if accuracy > best_accuracy:
@@ -246,10 +265,11 @@ def train(config, log_dir=None):
                 print(f'Saved best model with accuracy: {accuracy:.4f}')
             
             elapsed_time = time.time() - start_time
-            print(f'Validation Accuracy: {accuracy:.4f} | Best: {best_accuracy:.4f} (Epoch {best_epoch}) | Elapsed: {format_elapsed_time(elapsed_time)}')
+            print(f'Train Instance Accuracy: {train_instance_accuracy:.4f} (Best: {best_train_instance_accuracy:.4f} @ Epoch {best_train_instance_epoch}) | Val Accuracy: {accuracy:.4f} (Best: {best_accuracy:.4f} @ Epoch {best_epoch}) | Elapsed: {format_elapsed_time(elapsed_time)}')
             
             # Log to tensorboard
             writer.add_scalar('Val/Accuracy', accuracy, epoch)
+            writer.add_scalar('Train/InstanceAccuracy', train_instance_accuracy, epoch)
         
         # Update learning rate
         scheduler.step()
@@ -257,11 +277,13 @@ def train(config, log_dir=None):
     
     writer.close()
     total_time = time.time() - start_time
-    print(f'Training completed. Best validation accuracy: {best_accuracy:.4f}')
+    print(f'Training completed.')
+    print(f'Best validation accuracy: {best_accuracy:.4f} (achieved at epoch {best_epoch})')
+    print(f'Best train instance accuracy: {best_train_instance_accuracy:.4f} (achieved at epoch {best_train_instance_epoch})')
     
     # Print training accuracy metrics when bag_size=1
     if track_train_accuracy:
-        print(f'Best train accuracy: {best_train_accuracy:.4f} (achieved at epoch {best_train_accuracy_epoch})')
+        print(f'Best train accuracy (bag-level): {best_train_accuracy:.4f} (achieved at epoch {best_train_accuracy_epoch})')
     
     print(f'Total training time: {format_elapsed_time(total_time)}')
     
