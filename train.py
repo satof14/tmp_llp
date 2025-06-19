@@ -251,7 +251,7 @@ def train(config, log_dir=None):
             elapsed_time = time.time() - start_time
             print(f'Epoch {epoch}/{config["epochs"]-1} | Elapsed: {format_elapsed_time(elapsed_time)}')
             print(f'Train Instance Accuracy: {train_instance_accuracy:.4f} (Best: {best_train_instance_accuracy:.4f} @ Epoch {best_train_instance_epoch})')
-            print(f'Val Accuracy: {accuracy:.4f} (Best: {best_accuracy:.4f} @ Epoch {best_epoch})')
+            print(f'           Val Accuracy: {accuracy:.4f} (Best: {best_accuracy:.4f} @ Epoch {best_epoch})')
             
             # Log to tensorboard
             writer.add_scalar('Val/Accuracy', accuracy, epoch)
