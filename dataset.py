@@ -7,6 +7,7 @@ from collections import defaultdict
 import random
 import os
 from PIL import Image
+from sklearn.model_selection import train_test_split
 
 
 class CIFAR10BagDataset(Dataset):
@@ -171,15 +172,21 @@ def get_single_image_dataloader(root='./data', train=False, batch_size=100,
 
 
 class MIFCMBagDataset(Dataset):
-    """MIFCM 3-classes dataset for bag-level training with label proportions."""
+    """MIFCM 3-classes dataset for bag-level training with label proportions.
     
-    def __init__(self, root='./data', train=True, bag_size=5, transform=None):
+    This class supports train/validation split from the original train set.
+    """
+    
+    def __init__(self, root='./data', split='train', bag_size=5, transform=None, 
+                 val_split=0.2, random_seed=42):
         self.bag_size = bag_size
-        self.transform = transform if transform else self._get_default_transform(train)
+        self.split = split
+        self.val_split = val_split
+        self.random_seed = random_seed
+        self.transform = transform if transform else self._get_default_transform(split == 'train')
         
         # Build path to dataset
         dataset_path = os.path.join(root, "dataset_preprocessed_mokushi_screening_3classes_train_test")
-        split_path = os.path.join(dataset_path, "train" if train else "test")
         
         # Group indices by class
         self.class_indices = defaultdict(list)
@@ -188,18 +195,51 @@ class MIFCMBagDataset(Dataset):
         
         label_mapping = {'G1': 0, 'S': 1, 'G2': 2}
         
-        # Load data and group by class
-        for label_name in os.listdir(split_path):
-            label_path = os.path.join(split_path, label_name)
-            if os.path.isdir(label_path) and label_name in label_mapping:
-                label_idx = label_mapping[label_name]
-                for file in os.listdir(label_path):
-                    if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                        img_path = os.path.join(label_path, file)
-                        idx = len(self.data)
-                        self.data.append(img_path)
-                        self.targets.append(label_idx)
-                        self.class_indices[label_idx].append(idx)
+        # Load data based on split
+        if split in ['train', 'val']:
+            # Load from train folder and split
+            train_path = os.path.join(dataset_path, "train")
+            all_data = []
+            all_targets = []
+            
+            for label_name in os.listdir(train_path):
+                label_path = os.path.join(train_path, label_name)
+                if os.path.isdir(label_path) and label_name in label_mapping:
+                    label_idx = label_mapping[label_name]
+                    for file in os.listdir(label_path):
+                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                            img_path = os.path.join(label_path, file)
+                            all_data.append(img_path)
+                            all_targets.append(label_idx)
+            
+            # Split data into train and validation
+            train_data, val_data, train_targets, val_targets = self._split_data(
+                all_data, all_targets, val_split, random_seed
+            )
+            
+            if split == 'train':
+                self.data = train_data
+                self.targets = train_targets
+            else:  # split == 'val'
+                self.data = val_data
+                self.targets = val_targets
+                
+        else:  # split == 'test'
+            # Load from test folder
+            test_path = os.path.join(dataset_path, "test")
+            for label_name in os.listdir(test_path):
+                label_path = os.path.join(test_path, label_name)
+                if os.path.isdir(label_path) and label_name in label_mapping:
+                    label_idx = label_mapping[label_name]
+                    for file in os.listdir(label_path):
+                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                            img_path = os.path.join(label_path, file)
+                            self.data.append(img_path)
+                            self.targets.append(label_idx)
+        
+        # Group by class
+        for idx, target in enumerate(self.targets):
+            self.class_indices[target].append(idx)
         
         self.num_classes = 3
         self.class_indices = {k: list(v) for k, v in self.class_indices.items()}
@@ -207,8 +247,17 @@ class MIFCMBagDataset(Dataset):
         # Create bags
         self.bags = self._create_bags()
         
-    def _get_default_transform(self, train):
-        if train:
+    def _split_data(self, data, targets, val_split, random_seed):
+        """Split data into train and validation sets while preserving class distribution."""
+        train_data, val_data, train_targets, val_targets = train_test_split(
+            data, targets, test_size=val_split, random_state=random_seed,
+            stratify=targets  # Preserve class distribution
+        )
+        
+        return train_data, val_data, train_targets, val_targets
+    
+    def _get_default_transform(self, is_train):
+        if is_train:
             return transforms.Compose([
                 transforms.Resize(64),
                 transforms.RandomCrop(64, padding=8),
@@ -301,31 +350,77 @@ class MIFCMBagDataset(Dataset):
 
 
 class MIFCMSingleImageDataset(Dataset):
-    """MIFCM 3-classes dataset for single image evaluation."""
+    """MIFCM 3-classes dataset for single image evaluation.
     
-    def __init__(self, root='./data', train=False, transform=None):
+    This class supports train/validation split from the original train set.
+    """
+    
+    def __init__(self, root='./data', split='test', transform=None, 
+                 val_split=0.2, random_seed=42):
+        self.split = split
+        self.val_split = val_split
+        self.random_seed = random_seed
         self.transform = transform if transform else self._get_default_transform()
         
         # Build path to dataset
         dataset_path = os.path.join(root, "dataset_preprocessed_mokushi_screening_3classes_train_test")
-        split_path = os.path.join(dataset_path, "train" if train else "test")
         
         self.data = []
         self.targets = []
         
         label_mapping = {'G1': 0, 'S': 1, 'G2': 2}
         
-        # Load data
-        for label_name in os.listdir(split_path):
-            label_path = os.path.join(split_path, label_name)
-            if os.path.isdir(label_path) and label_name in label_mapping:
-                label_idx = label_mapping[label_name]
-                for file in os.listdir(label_path):
-                    if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                        img_path = os.path.join(label_path, file)
-                        self.data.append(img_path)
-                        self.targets.append(label_idx)
+        # Load data based on split
+        if split in ['train', 'val']:
+            # Load from train folder and split
+            train_path = os.path.join(dataset_path, "train")
+            all_data = []
+            all_targets = []
+            
+            for label_name in os.listdir(train_path):
+                label_path = os.path.join(train_path, label_name)
+                if os.path.isdir(label_path) and label_name in label_mapping:
+                    label_idx = label_mapping[label_name]
+                    for file in os.listdir(label_path):
+                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                            img_path = os.path.join(label_path, file)
+                            all_data.append(img_path)
+                            all_targets.append(label_idx)
+            
+            # Split data into train and validation
+            train_data, val_data, train_targets, val_targets = self._split_data(
+                all_data, all_targets, val_split, random_seed
+            )
+            
+            if split == 'train':
+                self.data = train_data
+                self.targets = train_targets
+            else:  # split == 'val'
+                self.data = val_data
+                self.targets = val_targets
+                
+        else:  # split == 'test'
+            # Load from test folder
+            test_path = os.path.join(dataset_path, "test")
+            for label_name in os.listdir(test_path):
+                label_path = os.path.join(test_path, label_name)
+                if os.path.isdir(label_path) and label_name in label_mapping:
+                    label_idx = label_mapping[label_name]
+                    for file in os.listdir(label_path):
+                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                            img_path = os.path.join(label_path, file)
+                            self.data.append(img_path)
+                            self.targets.append(label_idx)
         
+    def _split_data(self, data, targets, val_split, random_seed):
+        """Split data into train and validation sets while preserving class distribution."""
+        train_data, val_data, train_targets, val_targets = train_test_split(
+            data, targets, test_size=val_split, random_state=random_seed,
+            stratify=targets  # Preserve class distribution
+        )
+        
+        return train_data, val_data, train_targets, val_targets
+    
     def _get_default_transform(self):
         return transforms.Compose([
             transforms.Resize(64),
@@ -348,10 +443,22 @@ class MIFCMSingleImageDataset(Dataset):
         return img, label
 
 
-def get_mifcm_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2, 
-                             num_workers=4, shuffle=True):
-    """Get dataloader for MIFCM bag-level training."""
-    dataset = MIFCMBagDataset(root=root, train=train, bag_size=bag_size)
+def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
+                             num_workers=4, shuffle=True, val_split=0.2, random_seed=42):
+    """Get dataloader for MIFCM bag-level training.
+    
+    Args:
+        root: Root directory of the dataset
+        split: 'train', 'val', or 'test'
+        bag_size: Number of images per bag
+        batch_size: Batch size for dataloader
+        num_workers: Number of workers for dataloader
+        shuffle: Whether to shuffle the data
+        val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
+        random_seed: Random seed for reproducible train/val split
+    """
+    dataset = MIFCMBagDataset(root=root, split=split, bag_size=bag_size, 
+                              val_split=val_split, random_seed=random_seed)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -362,10 +469,21 @@ def get_mifcm_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2
     return dataloader
 
 
-def get_mifcm_single_image_dataloader(root='./data', train=False, batch_size=100, 
-                                      num_workers=4, shuffle=False):
-    """Get dataloader for MIFCM single image evaluation."""
-    dataset = MIFCMSingleImageDataset(root=root, train=train)
+def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=100, 
+                                      num_workers=4, shuffle=False, val_split=0.2, random_seed=42):
+    """Get dataloader for MIFCM single image evaluation.
+    
+    Args:
+        root: Root directory of the dataset
+        split: 'train', 'val', or 'test'
+        batch_size: Batch size for dataloader
+        num_workers: Number of workers for dataloader
+        shuffle: Whether to shuffle the data
+        val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
+        random_seed: Random seed for reproducible train/val split
+    """
+    dataset = MIFCMSingleImageDataset(root=root, split=split, 
+                                      val_split=val_split, random_seed=random_seed)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
