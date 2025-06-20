@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader
+from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader
 
 
 def build_optimizer(model, config):
@@ -145,7 +145,12 @@ def train(config, log_dir=None):
     print(f'Using device: {device}')
     
     # Create model
-    img_size = 64 if config.get('dataset') == 'mifcm_3classes_newgate' else 32
+    if config.get('dataset') == 'mifcm_3classes_newgate':
+        img_size = 64
+    elif config.get('dataset') == 'human_somatic_small':
+        img_size = 128
+    else:
+        img_size = 32
     model = LLPAttentionModel(
         img_size=img_size,
         patch_size=config['patch_size'],
@@ -179,6 +184,29 @@ def train(config, log_dir=None):
         train_instance_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
             train=True,
+            batch_size=100,
+            shuffle=False
+        )
+    elif config.get('dataset') == 'human_somatic_small':
+        train_loader = get_human_somatic_small_bag_dataloader(
+            root=config['data_root'],
+            split='train',
+            bag_size=config['bag_size'],
+            batch_size=config['mini_batch_size'],
+            shuffle=True
+        )
+        
+        val_loader = get_human_somatic_small_single_image_dataloader(
+            root=config['data_root'],
+            split='test',
+            batch_size=100,
+            shuffle=False
+        )
+        
+        # Create train instance-level dataloader for train accuracy evaluation
+        train_instance_loader = get_human_somatic_small_single_image_dataloader(
+            root=config['data_root'],
+            split='train',
             batch_size=100,
             shuffle=False
         )

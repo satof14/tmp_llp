@@ -93,7 +93,7 @@ def main():
                         help='Epsilon for optimizer (default: 1e-8)')
     
     # Other arguments
-    parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'mifcm_3classes_newgate'],
+    parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'mifcm_3classes_newgate', 'human_somatic_small'],
                         help='Dataset to use (default: cifar10)')
     parser.add_argument('--num_classes', type=int, default=None,
                         help='Number of classes (auto-detected based on dataset if not specified)')
@@ -115,6 +115,8 @@ def main():
     # Auto-detect num_classes if not specified
     if args.num_classes is None:
         if args.dataset == 'mifcm_3classes_newgate':
+            args.num_classes = 3
+        elif args.dataset == 'human_somatic_small':
             args.num_classes = 3
         else:  # cifar10
             args.num_classes = 10

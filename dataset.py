@@ -374,3 +374,193 @@ def get_mifcm_single_image_dataloader(root='./data', train=False, batch_size=100
         pin_memory=True
     )
     return dataloader
+
+
+class HumanSomaticSmallBagDataset(Dataset):
+    """Human Somatic Small dataset for bag-level training with label proportions."""
+    
+    def __init__(self, root='./data', split='train', bag_size=5, transform=None):
+        self.bag_size = bag_size
+        self.transform = transform if transform else self._get_default_transform(split == 'train')
+        
+        # Build path to dataset - same structure as llp_vat
+        self.root = root
+        
+        # Group indices by class using text files
+        self.class_indices = defaultdict(list)
+        self.data = []
+        self.targets = []
+        
+        # Load data from text files (train.txt, val.txt, test.txt)
+        list_file = f'{split}.txt'
+        with open(os.path.join(root, list_file), 'r') as f:
+            for line in f:
+                rel_path, label_idx = line.strip().split()
+                img_path = os.path.join(root, split, rel_path)
+                idx = len(self.data)
+                self.data.append(img_path)
+                self.targets.append(int(label_idx))
+                self.class_indices[int(label_idx)].append(idx)
+        
+        self.num_classes = 3
+        self.class_indices = {k: list(v) for k, v in self.class_indices.items()}
+        
+        # Create bags
+        self.bags = self._create_bags()
+        
+    def _get_default_transform(self, train):
+        if train:
+            return transforms.Compose([
+                transforms.RandomCrop(128, padding=16),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            ])
+        else:
+            return transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            ])
+
+    def _create_bags(self):
+        bags = []
+        
+        # Create balanced bags with known proportions
+        num_bags = len(self.data) // self.bag_size
+        
+        for _ in range(num_bags):
+            # Randomly sample distribution of classes in the bag
+            proportions = np.random.dirichlet(np.ones(self.num_classes))
+            
+            # Convert proportions to counts
+            counts = np.round(proportions * self.bag_size).astype(int)
+            
+            # Adjust counts to ensure sum equals bag_size
+            diff = self.bag_size - counts.sum()
+            if diff > 0:
+                # Add to random classes
+                indices = np.random.choice(self.num_classes, diff, replace=False)
+                for idx in indices:
+                    counts[idx] += 1
+            elif diff < 0:
+                # Remove from random classes with count > 0
+                nonzero_indices = np.where(counts > 0)[0]
+                indices = np.random.choice(nonzero_indices, -diff, replace=False)
+                for idx in indices:
+                    counts[idx] -= 1
+            
+            # Sample images according to counts
+            bag_indices = []
+            bag_labels = []
+            
+            for class_idx, count in enumerate(counts):
+                if count > 0 and class_idx in self.class_indices:
+                    available_indices = self.class_indices[class_idx]
+                    if len(available_indices) >= count:
+                        sampled_indices = random.sample(available_indices, count)
+                        bag_indices.extend(sampled_indices)
+                        bag_labels.extend([class_idx] * count)
+            
+            # Skip if bag is empty or too small
+            if len(bag_indices) < self.bag_size:
+                continue
+                
+            # Calculate actual proportions
+            actual_proportions = np.zeros(self.num_classes)
+            for label in bag_labels:
+                actual_proportions[label] += 1
+            actual_proportions /= len(bag_labels)
+            
+            bags.append({
+                'indices': bag_indices,
+                'labels': bag_labels,
+                'proportions': actual_proportions
+            })
+        
+        return bags
+    
+    def __len__(self):
+        return len(self.bags)
+    
+    def __getitem__(self, idx):
+        bag = self.bags[idx]
+        images = []
+        
+        for img_idx in bag['indices']:
+            img_path = self.data[img_idx]
+            img = Image.open(img_path).convert("RGB")
+            img = self.transform(img)
+            images.append(img)
+        
+        # Stack images
+        images = torch.stack(images)  # (bag_size, C, H, W)
+        proportions = torch.tensor(bag['proportions'], dtype=torch.float32)
+        
+        return images, proportions
+
+
+class HumanSomaticSmallSingleImageDataset(Dataset):
+    """Human Somatic Small dataset for single image evaluation."""
+    
+    def __init__(self, root='./data', split='test', transform=None):
+        self.transform = transform if transform else self._get_default_transform()
+        
+        self.data = []
+        self.targets = []
+        
+        # Load data from text files
+        list_file = f'{split}.txt'
+        with open(os.path.join(root, list_file), 'r') as f:
+            for line in f:
+                rel_path, label_idx = line.strip().split()
+                img_path = os.path.join(root, split, rel_path)
+                self.data.append(img_path)
+                self.targets.append(int(label_idx))
+        
+    def _get_default_transform(self):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        ])
+    
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        img_path = self.data[idx]
+        label = self.targets[idx]
+        
+        img = Image.open(img_path).convert("RGB")
+        img = self.transform(img)
+        
+        # Add batch dimension to match bag format
+        img = img.unsqueeze(0)  # (1, C, H, W)
+        return img, label
+
+
+def get_human_somatic_small_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
+                                           num_workers=4, shuffle=True):
+    """Get dataloader for Human Somatic Small bag-level training."""
+    dataset = HumanSomaticSmallBagDataset(root=root, split=split, bag_size=bag_size)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        shuffle=shuffle, 
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    return dataloader
+
+
+def get_human_somatic_small_single_image_dataloader(root='./data', split='test', batch_size=100, 
+                                                    num_workers=4, shuffle=False):
+    """Get dataloader for Human Somatic Small single image evaluation."""
+    dataset = HumanSomaticSmallSingleImageDataset(root=root, split=split)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=True
+    )
+    return dataloader
