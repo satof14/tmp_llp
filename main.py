@@ -105,6 +105,8 @@ def main():
                         help='Path to model checkpoint for evaluation (default: best_model.pth)')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
+    parser.add_argument('--valid_ratio', type=float, default=0.1,
+                        help='Validation split ratio (default: 0.1)')
     
     args = parser.parse_args()
     
@@ -139,6 +141,7 @@ def main():
         'grad_clip': args.grad_clip,
         'data_root': args.data_root,
         'seed': args.seed,
+        'valid_ratio': args.valid_ratio,
         'optimizer': args.optimizer,
         'momentum': args.momentum,
         'beta1': args.beta1,
