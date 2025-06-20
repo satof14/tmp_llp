@@ -90,6 +90,80 @@ def get_class_distribution(dataset, dataset_name):
     return class_counts
 
 
+def get_single_image_dataset_distribution(loader, dataset_name):
+    """Get class distribution for single image datasets (validation/test)."""
+    dataset = loader.dataset
+    
+    # Handle different dataset types
+    if hasattr(dataset, 'dataset'):
+        # This is a Subset wrapping the original dataset
+        original_dataset = dataset.dataset
+        if hasattr(original_dataset, 'targets'):
+            # Get targets for the subset indices
+            subset_targets = [original_dataset.targets[i] for i in dataset.indices]
+            labels = subset_targets
+        else:
+            # Fallback: iterate through subset
+            labels = []
+            for i in dataset.indices:
+                _, label = original_dataset[i]
+                labels.append(label)
+    elif hasattr(dataset, 'targets'):
+        # Direct dataset with targets attribute
+        labels = dataset.targets
+    else:
+        # Fallback: iterate through all samples
+        labels = []
+        for i in range(len(dataset)):
+            _, label = dataset[i]
+            labels.append(label)
+    
+    class_counts = Counter(labels)
+    total_samples = len(labels)
+    
+    print(f"Class distribution ({dataset_name}):")
+    for class_idx in sorted(class_counts.keys()):
+        count = class_counts[class_idx]
+        percentage = (count / total_samples) * 100
+        print(f"  Class {class_idx}: {count:,} samples ({percentage:.1f}%)")
+    print(f"  Total {dataset_name.lower()} samples: {total_samples:,}")
+    
+    return class_counts
+
+
+def get_train_bags_class_distribution(train_loader):
+    """Get class distribution specifically from training bags only."""
+    # Get the actual training bags (after split)
+    if hasattr(train_loader.dataset, 'dataset'):
+        # This is a Subset wrapping the original bag dataset
+        full_bag_dataset = train_loader.dataset.dataset
+        train_indices = train_loader.dataset.indices
+        
+        # Get labels only from training bags
+        train_labels = []
+        for bag_idx in train_indices:
+            bag = full_bag_dataset.bags[bag_idx]
+            train_labels.extend(bag['labels'])
+    else:
+        # Direct bag dataset (no split)
+        bag_dataset = train_loader.dataset
+        train_labels = []
+        for bag in bag_dataset.bags:
+            train_labels.extend(bag['labels'])
+    
+    class_counts = Counter(train_labels)
+    total_samples = len(train_labels)
+    
+    print(f"Class distribution (Train):")
+    for class_idx in sorted(class_counts.keys()):
+        count = class_counts[class_idx]
+        percentage = (count / total_samples) * 100
+        print(f"  Class {class_idx}: {count:,} samples ({percentage:.1f}%)")
+    print(f"  Total training samples in bags: {total_samples:,}")
+    
+    return class_counts
+
+
 def print_dataset_info(train_loader, val_loader, test_loader, config):
     """Print comprehensive dataset statistics."""
     print("\n" + "="*60)
@@ -108,28 +182,17 @@ def print_dataset_info(train_loader, val_loader, test_loader, config):
     print(f"  Validation samples: {len(val_loader.dataset):,}")
     print(f"  Test samples: {len(test_loader.dataset):,}")
     
-    # Calculate total training samples in bags
-    if hasattr(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, 'bags'):
-        bag_dataset = train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset
-        total_train_samples = sum(len(bag['indices']) for bag in bag_dataset.bags)
-        print(f"  Total training samples in bags: {total_train_samples:,}")
-    
     # Class distributions
     print(f"\nClass distributions:")
     
-    # Training set class distribution (from bags)
-    if hasattr(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, 'bags'):
-        get_class_distribution(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, "Train")
+    # Training set class distribution (from training bags only)
+    get_train_bags_class_distribution(train_loader)
     
     # Validation set class distribution
-    if hasattr(val_loader.dataset.dataset if hasattr(val_loader.dataset, 'dataset') else val_loader.dataset, 'targets'):
-        get_class_distribution(val_loader.dataset.dataset if hasattr(val_loader.dataset, 'dataset') else val_loader.dataset, "Validation")
-    elif hasattr(val_loader.dataset, 'targets'):
-        get_class_distribution(val_loader.dataset, "Validation")
+    get_single_image_dataset_distribution(val_loader, "Validation")
     
     # Test set class distribution
-    if hasattr(test_loader.dataset, 'targets'):
-        get_class_distribution(test_loader.dataset, "Test")
+    get_single_image_dataset_distribution(test_loader, "Test")
     
     print("="*60)
 
