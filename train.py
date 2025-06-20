@@ -10,6 +10,7 @@ import time
 
 from model import LLPAttentionModel
 from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader
+from collections import Counter
 
 
 def build_optimizer(model, config):
@@ -46,6 +47,147 @@ def build_optimizer(model, config):
     
     print(f"Using {optimizer_type.upper()} optimizer with lr={lr}")
     return optimizer
+
+
+def count_parameters(model):
+    """Count the number of trainable parameters in a model."""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def parameters_string(model):
+    """Get a string representation of model parameters."""
+    trainable_params = count_parameters(model)
+    total_params = sum(p.numel() for p in model.parameters())
+    return f"Trainable parameters: {trainable_params:,} | Total parameters: {total_params:,}"
+
+
+def get_class_distribution(dataset, dataset_name):
+    """Get class distribution for a dataset."""
+    if hasattr(dataset, 'targets'):
+        # Single image dataset
+        labels = dataset.targets
+    elif hasattr(dataset, 'cifar10'):
+        # CIFAR10 wrapper
+        labels = [dataset.cifar10[i][1] for i in range(len(dataset.cifar10))]
+    elif hasattr(dataset, 'bags'):
+        # Bag dataset - get all individual labels
+        labels = []
+        for bag in dataset.bags:
+            labels.extend(bag['labels'])
+    else:
+        return None
+    
+    class_counts = Counter(labels)
+    total_samples = len(labels)
+    
+    print(f"Class distribution ({dataset_name}):")
+    for class_idx in sorted(class_counts.keys()):
+        count = class_counts[class_idx]
+        percentage = (count / total_samples) * 100
+        print(f"  Class {class_idx}: {count:,} samples ({percentage:.1f}%)")
+    print(f"  Total samples: {total_samples:,}")
+    
+    return class_counts
+
+
+def print_dataset_info(train_loader, val_loader, test_loader, config):
+    """Print comprehensive dataset statistics."""
+    print("\n" + "="*60)
+    print("DATASET STATISTICS")
+    print("="*60)
+    
+    # Basic info
+    print(f"Dataset: {config.get('dataset', 'CIFAR-10')}")
+    print(f"Number of classes: {config['num_classes']}")
+    print(f"Bag size: {config['bag_size']}")
+    print(f"Mini-batch size: {config['mini_batch_size']}")
+    
+    # Dataset sizes
+    print(f"\nDataset splits:")
+    print(f"  Train bags: {len(train_loader.dataset):,}")
+    print(f"  Validation samples: {len(val_loader.dataset):,}")
+    print(f"  Test samples: {len(test_loader.dataset):,}")
+    
+    # Calculate total training samples in bags
+    if hasattr(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, 'bags'):
+        bag_dataset = train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset
+        total_train_samples = sum(len(bag['indices']) for bag in bag_dataset.bags)
+        print(f"  Total training samples in bags: {total_train_samples:,}")
+    
+    # Class distributions
+    print(f"\nClass distributions:")
+    
+    # Training set class distribution (from bags)
+    if hasattr(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, 'bags'):
+        get_class_distribution(train_loader.dataset.dataset if hasattr(train_loader.dataset, 'dataset') else train_loader.dataset, "Train")
+    
+    # Validation set class distribution
+    if hasattr(val_loader.dataset.dataset if hasattr(val_loader.dataset, 'dataset') else val_loader.dataset, 'targets'):
+        get_class_distribution(val_loader.dataset.dataset if hasattr(val_loader.dataset, 'dataset') else val_loader.dataset, "Validation")
+    elif hasattr(val_loader.dataset, 'targets'):
+        get_class_distribution(val_loader.dataset, "Validation")
+    
+    # Test set class distribution
+    if hasattr(test_loader.dataset, 'targets'):
+        get_class_distribution(test_loader.dataset, "Test")
+    
+    print("="*60)
+
+
+def print_model_info(model, optimizer, config, log_dir=None):
+    """Print comprehensive model information and save to file."""
+    print("\n" + "="*60)
+    print("MODEL INFORMATION")
+    print("="*60)
+    
+    # Model architecture info
+    print(f"Model: LLPAttentionModel")
+    print(f"Image size: {config.get('img_size', 32)}x{config.get('img_size', 32)}")
+    print(f"Patch size: {config['patch_size']}x{config['patch_size']}")
+    print(f"Embedding dimension: {config['embed_dim']}")
+    print(f"Number of attention heads: {config['num_heads']}")
+    print(f"Number of transformer layers: {config['L']}")
+    print(f"MLP ratio: {config.get('mlp_ratio', 4.0)}")
+    print(f"Dropout rate: {config['dropout']}")
+    
+    # Parameter count
+    param_info = parameters_string(model)
+    print(f"\n{param_info}")
+    
+    # Optimizer info
+    print(f"\nOptimizer: {optimizer.__class__.__name__}")
+    print(f"Learning rate: {config['learning_rate']}")
+    print(f"Weight decay: {config['weight_decay']}")
+    if hasattr(optimizer, 'betas'):
+        print(f"Betas: {optimizer.param_groups[0]['betas']}")
+    if hasattr(optimizer, 'momentum'):
+        print(f"Momentum: {optimizer.param_groups[0]['momentum']}")
+    
+    print("="*60)
+    
+    # Save model structure to file
+    if log_dir:
+        model_info_path = os.path.join(log_dir, 'model_structure.txt')
+        with open(model_info_path, 'w') as f:
+            f.write("MODEL STRUCTURE\n")
+            f.write("="*50 + "\n\n")
+            f.write(str(model) + "\n\n")
+            f.write("MODEL PARAMETERS\n")
+            f.write("="*50 + "\n")
+            f.write(f"{param_info}\n\n")
+            
+            # Detailed parameter breakdown
+            f.write("PARAMETER BREAKDOWN:\n")
+            f.write("-"*30 + "\n")
+            total_params = 0
+            for name, param in model.named_parameters():
+                param_count = param.numel()
+                total_params += param_count
+                f.write(f"{name:.<40} {param_count:>10,}\n")
+            f.write("-"*50 + "\n")
+            f.write(f"{'Total':<40} {total_params:>10,}\n")
+        
+        print(f"Model structure saved to: {model_info_path}")
 
 
 def format_elapsed_time(seconds):
@@ -160,6 +302,10 @@ def train(config, log_dir=None):
         img_size = 128
     else:
         img_size = 32
+    
+    # Store img_size in config for model info display
+    config['img_size'] = img_size
+    
     model = LLPAttentionModel(
         img_size=img_size,
         patch_size=config['patch_size'],
@@ -340,10 +486,8 @@ def train(config, log_dir=None):
             shuffle=False
         )
     
-    # Print split information
-    print(f"Dataset split - Train bags: {len(train_loader.dataset)}, Validation samples: {len(val_loader.dataset)}")
-    if hasattr(locals(), 'test_loader'):
-        print(f"Test samples: {len(test_loader.dataset)}")
+    # Print comprehensive dataset information
+    print_dataset_info(train_loader, val_loader, test_loader, config)
     
     # Create subset of training data to match validation set size for fair comparison
     val_size = len(val_loader.dataset)
@@ -377,6 +521,9 @@ def train(config, log_dir=None):
     # Create optimizer and loss function
     optimizer = build_optimizer(model, config)
     criterion = nn.KLDivLoss(reduction='batchmean')
+    
+    # Print comprehensive model information
+    print_model_info(model, optimizer, config, log_dir)
     
     # Create scheduler with warmup
     warmup_epochs = config.get('warmup_epochs', 0)
