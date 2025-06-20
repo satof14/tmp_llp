@@ -419,7 +419,7 @@ def train(config, log_dir=None):
         # Create single image dataset and subset it
         mifcm_single_dataset = get_mifcm_single_image_dataloader(
             root=config['data_root'],
-            train=True,
+            split='train',
             batch_size=100,
             shuffle=False
         ).dataset
