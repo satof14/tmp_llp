@@ -437,7 +437,7 @@ def train(config, log_dir=None):
         # Create test loader for final evaluation
         test_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
-            train=False,
+            split='test',
             batch_size=100,
             shuffle=False
         )
@@ -445,7 +445,7 @@ def train(config, log_dir=None):
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
-            train=True,
+            split='train',
             batch_size=100,
             shuffle=False
         )
