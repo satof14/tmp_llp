@@ -386,7 +386,7 @@ def train(config, log_dir=None):
         # Create full bag dataset and split for training/validation
         full_bag_dataset = get_mifcm_bag_dataloader(
             root=config['data_root'],
-            train=True,
+            split='train',
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
             shuffle=True
