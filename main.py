@@ -78,6 +78,8 @@ def main():
                         help='Evaluation interval in epochs (default: 1)')
     parser.add_argument('--grad_clip', type=float, default=None,
                         help='Gradient clipping max norm (default: None, no clipping)')
+    parser.add_argument('--warmup_epochs', type=int, default=0,
+                        help='Number of warmup epochs (default: 0, no warmup)')
     
     # Optimizer arguments
     parser.add_argument('--optimizer', type=str, default='adamw',
@@ -139,6 +141,7 @@ def main():
         'dropout': args.dropout,
         'eval_interval': args.eval_interval,
         'grad_clip': args.grad_clip,
+        'warmup_epochs': args.warmup_epochs,
         'data_root': args.data_root,
         'seed': args.seed,
         'valid_ratio': args.valid_ratio,

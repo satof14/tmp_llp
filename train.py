@@ -378,10 +378,24 @@ def train(config, log_dir=None):
     optimizer = build_optimizer(model, config)
     criterion = nn.KLDivLoss(reduction='batchmean')
     
-    # Create scheduler
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=config['epochs'], eta_min=1e-6
-    )
+    # Create scheduler with warmup
+    warmup_epochs = config.get('warmup_epochs', 0)
+    if warmup_epochs > 0:
+        # Create warmup scheduler
+        warmup_scheduler = optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, total_iters=warmup_epochs
+        )
+        # Create main scheduler
+        main_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config['epochs'] - warmup_epochs, eta_min=1e-6
+        )
+        scheduler = optim.lr_scheduler.SequentialLR(
+            optimizer, [warmup_scheduler, main_scheduler], milestones=[warmup_epochs]
+        )
+    else:
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=config['epochs'], eta_min=1e-6
+        )
     
     # Create tensorboard writer
     tensorboard_dir = os.path.join(log_dir, 'tensorboard') if log_dir else 'results/llp_attention'
@@ -484,6 +498,7 @@ if __name__ == '__main__':
         'weight_decay': 0.01,
         'mlp_ratio': 4.0,
         'grad_clip': None,
+        'warmup_epochs': 0,
         'valid_ratio': 0.1,
         'seed': 42
     }
