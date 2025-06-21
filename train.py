@@ -10,7 +10,7 @@ import sys
 import json
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_indices
+from dataset import get_cifar_bag_dataloader, get_cifar_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_indices
 from collections import Counter
 from torch.utils.data import DataLoader
 
@@ -560,7 +560,7 @@ def train(config, log_dir=None):
         print(f"Valid split: {len(val_indices)} images")
         
         # Create train bag dataloader directly using train_indices
-        train_loader = get_bag_dataloader(
+        train_loader = get_cifar_bag_dataloader(
             root=config['data_root'],
             train=True,
             bag_size=config['bag_size'],
@@ -570,7 +570,7 @@ def train(config, log_dir=None):
         )
         
         # For validation, create single-image loader from validation indices
-        val_loader = get_single_image_dataloader(
+        val_loader = get_cifar_single_image_dataloader(
             root=config['data_root'],
             split='val',
             batch_size=100,
@@ -579,7 +579,7 @@ def train(config, log_dir=None):
         )
         
         # Create test loader for final evaluation
-        test_loader = get_single_image_dataloader(
+        test_loader = get_cifar_single_image_dataloader(
             root=config['data_root'],
             split='test',
             batch_size=100,
@@ -587,7 +587,7 @@ def train(config, log_dir=None):
         )
         
         # Create train instance-level dataloader for train accuracy evaluation
-        train_instance_loader = get_single_image_dataloader(
+        train_instance_loader = get_cifar_single_image_dataloader(
             root=config['data_root'],
             split='train',
             batch_size=100,

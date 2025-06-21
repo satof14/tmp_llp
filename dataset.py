@@ -308,7 +308,7 @@ class CIFAR10SingleImageDataset(Dataset):
         return img, label
 
 
-def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2, 
+def get_cifar_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2, 
                        num_workers=4, shuffle=True, indices=None):
     """Get dataloader for bag-level training."""
     dataset = CIFAR10BagDataset(root=root, train=train, bag_size=bag_size, 
@@ -323,7 +323,7 @@ def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2,
     return dataloader
 
 
-def get_single_image_dataloader(root='./data', split='test', batch_size=100, 
+def get_cifar_single_image_dataloader(root='./data', split='test', batch_size=100, 
                                 num_workers=4, shuffle=False, indices=None, max_samples=None):
     """Get dataloader for single image evaluation."""
     dataset = CIFAR10SingleImageDataset(root=root, split=split, indices=indices, max_samples=max_samples)

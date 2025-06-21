@@ -11,7 +11,7 @@ import os
 import json
 
 from model import LLPAttentionModel
-from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_single_image_dataloader
+from dataset import get_cifar_single_image_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_single_image_dataloader
 
 
 def evaluate_model(model_path, config=None, device=None):
@@ -81,7 +81,7 @@ def evaluate_model(model_path, config=None, device=None):
             channel_stats=channel_stats
         )
     else:
-        test_loader = get_single_image_dataloader(
+        test_loader = get_cifar_single_image_dataloader(
             root=config['data_root'],
             split='test',
             batch_size=100,
