@@ -646,8 +646,8 @@ def train(config, log_dir=None):
     writer = SummaryWriter(tensorboard_dir)
     
     # Training loop
-    best_accuracy = 0
-    best_epoch = 0
+    best_valid_accuracy = 0
+    best_valid_epoch = 0
     best_train_instance_accuracy = 0
     best_train_instance_epoch = 0
     best_test_accuracy = 0
@@ -706,7 +706,7 @@ def train(config, log_dir=None):
         # Evaluate
         if (epoch + 1) % config['eval_interval'] == 0:
             # Evaluate on validation set
-            accuracy = evaluate(model, val_loader, device, epoch)
+            valid_accuracy = evaluate(model, val_loader, device, epoch)
             
             # Evaluate on test set
             test_accuracy = evaluate(model, test_loader, device, epoch)
@@ -724,26 +724,26 @@ def train(config, log_dir=None):
                 best_test_epoch = epoch
             
             # Save best model based on validation accuracy
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                best_epoch = epoch
+            if valid_accuracy > best_valid_accuracy:
+                best_valid_accuracy = valid_accuracy
+                best_valid_epoch = epoch
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'val_accuracy': accuracy,
+                    'val_accuracy': valid_accuracy,
                     'test_accuracy': test_accuracy,
                     'config': config
                 }, os.path.join(log_dir, 'best_model.pth') if log_dir else 'best_model.pth')
-                print(f'[Epoch {epoch}/{config["epochs"]}] Saved best model with val accuracy: {accuracy:.4f}, test accuracy: {test_accuracy:.4f}')
+                print(f'[Epoch {epoch}/{config["epochs"]}] Saved best model with val accuracy: {valid_accuracy:.4f}, test accuracy: {test_accuracy:.4f}')
             
             elapsed_time = time.time() - start_time
             print(f'[Epoch {epoch}/{config["epochs"]}] Train Instance Accuracy: {train_instance_accuracy:.4f} (Best: {best_train_instance_accuracy:.4f} @ Epoch {best_train_instance_epoch})')
-            print(f'[Epoch {epoch}/{config["epochs"]}]            Val Accuracy: {accuracy:.4f} (Best: {best_accuracy:.4f} @ Epoch {best_epoch})')
+            print(f'[Epoch {epoch}/{config["epochs"]}]            Val Accuracy: {valid_accuracy:.4f} (Best: {best_valid_accuracy:.4f} @ Epoch {best_valid_epoch})')
             print(f'[Epoch {epoch}/{config["epochs"]}]           Test Accuracy: {test_accuracy:.4f} (Best: {best_test_accuracy:.4f} @ Epoch {best_test_epoch})')
             
             # Log to tensorboard
-            writer.add_scalar('Val/Accuracy', accuracy, epoch)
+            writer.add_scalar('Val/Accuracy', valid_accuracy, epoch)
             writer.add_scalar('Test/Accuracy', test_accuracy, epoch)
             writer.add_scalar('Train/InstanceAccuracy', train_instance_accuracy, epoch)
         
@@ -754,14 +754,14 @@ def train(config, log_dir=None):
     writer.close()
     total_time = time.time() - start_time
     print(f'Training completed.')
-    print(f'Best validation accuracy: {best_accuracy:.4f} (achieved at epoch {best_epoch})')
+    print(f'Best validation accuracy: {best_valid_accuracy:.4f} (achieved at epoch {best_valid_epoch})')
     print(f'Best test accuracy: {best_test_accuracy:.4f} (achieved at epoch {best_test_epoch})')
     print(f'Best train instance accuracy: {best_train_instance_accuracy:.4f} (achieved at epoch {best_train_instance_epoch})')
     
     
     print(f'Total training time: {format_elapsed_time(total_time)}')
     
-    return model, best_accuracy
+    return model, best_valid_accuracy
 
 
 if __name__ == '__main__':
