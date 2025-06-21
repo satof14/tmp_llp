@@ -161,7 +161,7 @@ def analyze_predictions(results, num_examples=10):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate a trained LLP model')
-    parser.add_argument('--results-dir', type=str, required=True,
+    parser.add_argument('--results_dir', type=str, required=True,
                         help='Path to the results directory containing the model checkpoint')
     parser.add_argument('--checkpoint', type=str, default='best_model.pth',
                         help='Name of the checkpoint file (default: best_model.pth)')
