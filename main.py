@@ -60,6 +60,8 @@ def main():
                         help='Number of attention heads (default: 6)')
     parser.add_argument('--L', type=int, default=6,
                         help='Number of transformer layers (default: 6)')
+    parser.add_argument('--mlp_ratio', type=float, default=4.0,
+                        help='MLP ratio for transformer blocks (default: 4.0)')
     
     # Training arguments
     parser.add_argument('--bag_size', type=int, default=1,
@@ -132,6 +134,7 @@ def main():
         'embed_dim': args.embed_dim,
         'num_heads': args.num_heads,
         'L': args.L,
+        'mlp_ratio': args.mlp_ratio,
         'bag_size': args.bag_size,
         'mini_batch_size': args.mini_batch_size,
         'num_classes': args.num_classes,
