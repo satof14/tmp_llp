@@ -349,6 +349,28 @@ def train_valid_split(dataset, valid_ratio, seed):
     return train, valid
 
 
+def check_train_val_overlap(train_indices, val_indices, dataset_name="dataset"):
+    """Check if there's any overlap between train and validation indices."""
+    train_set = set(train_indices)
+    val_set = set(val_indices)
+    
+    overlap = train_set.intersection(val_set)
+    
+    if len(overlap) > 0:
+        print(f"\n{'='*60}")
+        print(f"ERROR: Found {len(overlap)} overlapping indices between train and validation sets!")
+        print(f"Train set size: {len(train_set)}, Validation set size: {len(val_set)}")
+        print(f"Overlapping indices (first 10): {list(overlap)[:10]}")
+        print(f"{'='*60}\n")
+        raise ValueError(f"Train and validation sets have {len(overlap)} overlapping indices. This will lead to data leakage!")
+    else:
+        print(f"\n{'='*60}")
+        print(f"✓ No overlap found between train and validation sets for {dataset_name}")
+        print(f"  Train set size: {len(train_set)} unique indices")
+        print(f"  Validation set size: {len(val_set)} unique indices")
+        print(f"{'='*60}\n")
+
+
 def train(config, log_dir=None):
     """Main training function."""
     # Record start time
@@ -415,6 +437,15 @@ def train(config, log_dir=None):
             bag = full_bag_dataset.bags[bag_idx]
             val_single_images.extend(bag['indices'])
             val_single_labels.extend(bag['labels'])
+        
+        # Collect training indices for overlap check
+        train_single_images_for_check = []
+        for bag_idx in train_bags.indices:
+            bag = full_bag_dataset.bags[bag_idx]
+            train_single_images_for_check.extend(bag['indices'])
+        
+        # Check for overlap between train and validation sets
+        check_train_val_overlap(train_single_images_for_check, val_single_images, "MIFCM")
         
         # Create single image dataset and subset it
         mifcm_single_dataset = get_mifcm_single_image_dataloader(
@@ -514,6 +545,15 @@ def train(config, log_dir=None):
             bag = full_bag_dataset.bags[bag_idx]
             val_single_images.extend(bag['indices'])
             val_single_labels.extend(bag['labels'])
+        
+        # Collect training indices for overlap check
+        train_single_images_for_check = []
+        for bag_idx in train_bags.indices:
+            bag = full_bag_dataset.bags[bag_idx]
+            train_single_images_for_check.extend(bag['indices'])
+        
+        # Check for overlap between train and validation sets
+        check_train_val_overlap(train_single_images_for_check, val_single_images, "CIFAR-10")
         
         # Create single image dataset and subset it
         cifar_single_dataset = get_single_image_dataloader(
