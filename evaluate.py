@@ -50,7 +50,7 @@ def evaluate_model(model_path, config=None, device=None):
     if config.get('dataset') == 'mifcm_3classes_newgate':
         test_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
-            train=False,
+            split='test',
             batch_size=100,
             shuffle=False
         )
