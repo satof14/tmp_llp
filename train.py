@@ -7,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 import time
 import sys
+import json
 
 from model import LLPAttentionModel
 from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_indices
@@ -416,6 +417,14 @@ def train(config, log_dir=None):
         channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
         print("Channel stats:", channel_stats)
         
+        # Save channel stats to file
+        stats_dir = os.path.join(config['data_root'], 'channel_stats')
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_file = os.path.join(stats_dir, 'channel_stats.json')
+        with open(stats_file, 'w') as f:
+            json.dump(channel_stats, f, indent=4)
+        print(f"Channel stats saved to: {stats_file}")
+        
         # Create train bag dataloader with channel stats
         train_loader = get_mifcm_bag_dataloader(
             root=config['data_root'],
@@ -480,6 +489,14 @@ def train(config, log_dir=None):
         # Calculate channel statistics from training indices
         channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
         print("Channel stats:", channel_stats)
+        
+        # Save channel stats to file
+        stats_dir = os.path.join(config['data_root'], 'channel_stats')
+        os.makedirs(stats_dir, exist_ok=True)
+        stats_file = os.path.join(stats_dir, 'channel_stats.json')
+        with open(stats_file, 'w') as f:
+            json.dump(channel_stats, f, indent=4)
+        print(f"Channel stats saved to: {stats_file}")
         
         # Create train bag dataloader with channel stats
         train_loader = get_human_somatic_small_bag_dataloader(
