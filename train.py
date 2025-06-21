@@ -280,7 +280,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
     total_loss = 0
     num_batches = 0
     
-    pbar = tqdm(dataloader, file=sys.__stdout__, ncols=80)
+    pbar = tqdm(dataloader, desc=f'Training(epoch {epoch})', file=sys.__stdout__, ncols=80)
     for batch_idx, (images, proportions) in enumerate(pbar):
         images = images.to(device)
         proportions = proportions.to(device)
@@ -319,14 +319,15 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
     return avg_loss
 
 
-def evaluate(model, dataloader, device):
+def evaluate(model, dataloader, device, epoch=None):
     """Evaluate model on single images."""
     model.eval()
     correct = 0
     total = 0
     
+    desc = f'Evaluating(epoch {epoch})' if epoch is not None else 'Evaluating'
     with torch.no_grad():
-        for images, labels in tqdm(dataloader, desc='Evaluating', file=sys.__stdout__, ncols=80):
+        for images, labels in tqdm(dataloader, desc=desc, file=sys.__stdout__, ncols=80):
             images = images.to(device)
             labels = labels.to(device)
             
@@ -705,13 +706,13 @@ def train(config, log_dir=None):
         # Evaluate
         if (epoch + 1) % config['eval_interval'] == 0:
             # Evaluate on validation set
-            accuracy = evaluate(model, val_loader, device)
+            accuracy = evaluate(model, val_loader, device, epoch)
             
             # Evaluate on test set
-            test_accuracy = evaluate(model, test_loader, device)
+            test_accuracy = evaluate(model, test_loader, device, epoch)
             
             # Evaluate on training set (instance-level)
-            train_instance_accuracy = evaluate(model, train_instance_loader, device)
+            train_instance_accuracy = evaluate(model, train_instance_loader, device, epoch)
             
             # Track best accuracies
             if train_instance_accuracy > best_train_instance_accuracy:
