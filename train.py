@@ -658,12 +658,20 @@ def train(config, log_dir=None):
     print("="*50)
     
     if hasattr(train_loader.dataset, 'transform') and train_loader.dataset.transform is not None:
-        print("Training transforms:")
+        print("Training (Bag) transforms:")
         if hasattr(train_loader.dataset.transform, 'transforms'):
             for i, t in enumerate(train_loader.dataset.transform.transforms):
                 print(f"  {i+1}. {t}")
         else:
             print(f"  1. {train_loader.dataset.transform}")
+    
+    if hasattr(train_instance_loader.dataset, 'transform') and train_instance_loader.dataset.transform is not None:
+        print("\nTraining (Instance) transforms:")
+        if hasattr(train_instance_loader.dataset.transform, 'transforms'):
+            for i, t in enumerate(train_instance_loader.dataset.transform.transforms):
+                print(f"  {i+1}. {t}")
+        else:
+            print(f"  1. {train_instance_loader.dataset.transform}")
     
     if hasattr(val_loader.dataset, 'transform') and val_loader.dataset.transform is not None:
         print("\nValidation transforms:")
