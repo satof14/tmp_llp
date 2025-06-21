@@ -384,9 +384,6 @@ def train(config, log_dir=None):
     
     # Create dataloaders with train/valid split
     if config.get('dataset') == 'mifcm_3classes_newgate':
-        # First, load all training data to get indices for train/valid split
-        from dataset import MIFCMSingleImageDataset
-        
         # Load all training data paths to determine train/valid split indices
         dataset_path = os.path.join(config['data_root'], "dataset_preprocessed_mokushi_screening_3classes_train_test")
         train_path = os.path.join(dataset_path, "train")
