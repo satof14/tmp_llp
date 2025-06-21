@@ -652,6 +652,39 @@ def train(config, log_dir=None):
     best_test_accuracy = 0
     best_test_epoch = 0
     
+    # Display transforms before training starts
+    print("\n" + "="*50)
+    print("TRANSFORMS CONFIGURATION")
+    print("="*50)
+    
+    if hasattr(train_loader.dataset, 'transform') and train_loader.dataset.transform is not None:
+        print("Training transforms:")
+        if hasattr(train_loader.dataset.transform, 'transforms'):
+            for i, t in enumerate(train_loader.dataset.transform.transforms):
+                print(f"  {i+1}. {t}")
+        else:
+            print(f"  1. {train_loader.dataset.transform}")
+    
+    if hasattr(val_loader.dataset, 'transform') and val_loader.dataset.transform is not None:
+        print("\nValidation transforms:")
+        if hasattr(val_loader.dataset.transform, 'transforms'):
+            for i, t in enumerate(val_loader.dataset.transform.transforms):
+                print(f"  {i+1}. {t}")
+        else:
+            print(f"  1. {val_loader.dataset.transform}")
+    
+    if hasattr(test_loader.dataset, 'transform') and test_loader.dataset.transform is not None:
+        print("\nTest transforms:")
+        if hasattr(test_loader.dataset.transform, 'transforms'):
+            for i, t in enumerate(test_loader.dataset.transform.transforms):
+                print(f"  {i+1}. {t}")
+        else:
+            print(f"  1. {test_loader.dataset.transform}")
+    
+    print("="*50)
+    print("STARTING TRAINING")
+    print("="*50 + "\n")
+    
     for epoch in range(config['epochs']):
         # Train
         avg_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch, writer, config['bag_size'], config['grad_clip'])
