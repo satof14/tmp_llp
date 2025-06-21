@@ -22,7 +22,7 @@ def evaluate_model(model_path, config=None, device=None):
     print(f'Using device: {device}')
     
     # Load checkpoint
-    checkpoint = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     
     # Extract config if not provided
     if config is None:
@@ -127,7 +127,7 @@ def evaluate_model(model_path, config=None, device=None):
     
     print('\nClassification Report:')
     print(classification_report(all_labels, all_predictions, 
-                              target_names=class_names, digits=4))
+                              target_names=class_names, digits=4, zero_division=0))
     
     # Confusion matrix
     cm = confusion_matrix(all_labels, all_predictions)
