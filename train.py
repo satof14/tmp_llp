@@ -12,6 +12,7 @@ import json
 from model import LLPAttentionModel
 from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_indices
 from collections import Counter
+from torch.utils.data import DataLoader
 
 
 def build_optimizer(model, config):
@@ -464,7 +465,8 @@ def train(config, log_dir=None):
             shuffle=False,
             train_indices=train_indices,
             val_indices=val_indices,
-            channel_stats=channel_stats
+            channel_stats=channel_stats,
+            max_samples=len(val_indices)
         )
     elif config.get('dataset') == 'human_somatic_small':
         # Load all training data to calculate channel statistics
@@ -530,7 +532,8 @@ def train(config, log_dir=None):
             split='train',
             batch_size=100,
             shuffle=False,
-            channel_stats=channel_stats
+            channel_stats=channel_stats,
+            max_samples=len(val_loader.dataset)
         )
     else:
         # For CIFAR-10, first load all training data to get indices for train/valid split
@@ -593,7 +596,8 @@ def train(config, log_dir=None):
             train=True,
             batch_size=100,
             shuffle=False,
-            indices=train_indices
+            indices=train_indices,
+            max_samples=len(val_indices)
         )
     
     # Print comprehensive dataset information

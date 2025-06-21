@@ -254,7 +254,7 @@ class CIFAR10BagDataset(Dataset):
 class CIFAR10SingleImageDataset(Dataset):
     """CIFAR-10 dataset for single image evaluation."""
     
-    def __init__(self, root='./data', train=False, transform=None, download=True, indices=None):
+    def __init__(self, root='./data', train=False, transform=None, download=True, indices=None, max_samples=None):
         self.transform = transform if transform else self._get_default_transform()
         self.indices = indices
         
@@ -263,11 +263,15 @@ class CIFAR10SingleImageDataset(Dataset):
             root=root, train=train, download=download, transform=self.transform
         )
         
-        # If indices are provided, create a mapping
-        if indices is not None:
-            self.data_indices = indices
+        # Indices must be provided for single image dataset
+        if indices is None:
+            raise ValueError("indices must be provided for CIFAR10SingleImageDataset")
+        
+        # If max_samples is specified and we have more samples than needed, subsample first
+        if max_samples is not None and len(indices) > max_samples:
+            self.data_indices = random.sample(indices, max_samples)
         else:
-            self.data_indices = list(range(len(self.cifar10)))
+            self.data_indices = indices
         
     def _get_default_transform(self):
         return transforms.Compose([
@@ -303,9 +307,9 @@ def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2,
 
 
 def get_single_image_dataloader(root='./data', train=False, batch_size=100, 
-                                num_workers=4, shuffle=False, indices=None):
+                                num_workers=4, shuffle=False, indices=None, max_samples=None):
     """Get dataloader for single image evaluation."""
-    dataset = CIFAR10SingleImageDataset(root=root, train=train, indices=indices)
+    dataset = CIFAR10SingleImageDataset(root=root, train=train, indices=indices, max_samples=max_samples)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -511,13 +515,14 @@ class MIFCMSingleImageDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='test', transform=None, 
-                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None):
+                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None, max_samples=None):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
         self.train_indices = train_indices
         self.val_indices = val_indices
         self.channel_stats = channel_stats
+        self.max_samples = max_samples
         self.transform = transform
         
         # Build path to dataset
@@ -537,13 +542,21 @@ class MIFCMSingleImageDataset(Dataset):
             if split == 'train':
                 if self.train_indices is None:
                     raise ValueError("train_indices must be provided for train split")
-                self.data = [all_data[i] for i in self.train_indices]
-                self.targets = [all_targets[i] for i in self.train_indices]
+                # Apply max_samples to indices first
+                indices_to_use = self.train_indices
+                if self.max_samples is not None and len(indices_to_use) > self.max_samples:
+                    indices_to_use = random.sample(indices_to_use, self.max_samples)
+                self.data = [all_data[i] for i in indices_to_use]
+                self.targets = [all_targets[i] for i in indices_to_use]
             else:  # split == 'val'
                 if self.val_indices is None:
                     raise ValueError("val_indices must be provided for val split")
-                self.data = [all_data[i] for i in self.val_indices]
-                self.targets = [all_targets[i] for i in self.val_indices]
+                # Apply max_samples to indices first
+                indices_to_use = self.val_indices
+                if self.max_samples is not None and len(indices_to_use) > self.max_samples:
+                    indices_to_use = random.sample(indices_to_use, self.max_samples)
+                self.data = [all_data[i] for i in indices_to_use]
+                self.targets = [all_targets[i] for i in indices_to_use]
                 
         else:  # split == 'test'
             # Load from test folder
@@ -637,7 +650,7 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
 
 def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=100, 
                                       num_workers=4, shuffle=False, val_split=0.2, random_seed=42,
-                                      train_indices=None, val_indices=None, channel_stats=None):
+                                      train_indices=None, val_indices=None, channel_stats=None, max_samples=None):
     """Get dataloader for MIFCM single image evaluation.
     
     Args:
@@ -651,11 +664,12 @@ def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=10
         train_indices: Pre-computed training indices (optional)
         val_indices: Pre-computed validation indices (optional)
         channel_stats: Channel statistics for normalization (required)
+        max_samples: Maximum number of samples to use (optional)
     """
     dataset = MIFCMSingleImageDataset(root=root, split=split, 
                                       val_split=val_split, random_seed=random_seed,
                                       train_indices=train_indices, val_indices=val_indices,
-                                      channel_stats=channel_stats)
+                                      channel_stats=channel_stats, max_samples=max_samples)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -811,8 +825,9 @@ class HumanSomaticSmallBagDataset(Dataset):
 class HumanSomaticSmallSingleImageDataset(Dataset):
     """Human Somatic Small dataset for single image evaluation."""
     
-    def __init__(self, root='./data', split='test', transform=None, channel_stats=None):
+    def __init__(self, root='./data', split='test', transform=None, channel_stats=None, max_samples=None):
         self.channel_stats = channel_stats
+        self.max_samples = max_samples
         # Initially set transform to None for dynamic calculation
         self.transform = transform
         
@@ -822,11 +837,18 @@ class HumanSomaticSmallSingleImageDataset(Dataset):
         # Load data from text files
         list_file = f'{split}.txt'
         with open(os.path.join(root, list_file), 'r') as f:
-            for line in f:
-                rel_path, label_idx = line.strip().split()
-                img_path = os.path.join(root, split, rel_path)
-                self.data.append(img_path)
-                self.targets.append(int(label_idx))
+            lines = f.readlines()
+        
+        # Apply max_samples before processing if specified
+        if self.max_samples is not None and len(lines) > self.max_samples:
+            lines = random.sample(lines, self.max_samples)
+        
+        # Process selected lines
+        for line in lines:
+            rel_path, label_idx = line.strip().split()
+            img_path = os.path.join(root, split, rel_path)
+            self.data.append(img_path)
+            self.targets.append(int(label_idx))
         
         # Set transform if not provided
         if self.transform is None:
@@ -874,9 +896,9 @@ def get_human_somatic_small_bag_dataloader(root='./data', split='train', bag_siz
 
 
 def get_human_somatic_small_single_image_dataloader(root='./data', split='test', batch_size=100, 
-                                                    num_workers=4, shuffle=False, channel_stats=None):
+                                                    num_workers=4, shuffle=False, channel_stats=None, max_samples=None):
     """Get dataloader for Human Somatic Small single image evaluation."""
-    dataset = HumanSomaticSmallSingleImageDataset(root=root, split=split, channel_stats=channel_stats)
+    dataset = HumanSomaticSmallSingleImageDataset(root=root, split=split, channel_stats=channel_stats, max_samples=max_samples)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
