@@ -417,86 +417,37 @@ def train(config, log_dir=None):
         channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
         print("Channel stats:", channel_stats)
         
-        # Create train and validation bag datasets using pre-split indices
-        train_bag_dataset = get_mifcm_bag_dataloader(
+        # Create train bag dataloader with channel stats
+        train_loader = get_mifcm_bag_dataloader(
             root=config['data_root'],
             split='train',
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
             shuffle=True,
             train_indices=train_indices,
-            val_indices=val_indices
-        ).dataset
-        
-        val_bag_dataset = get_mifcm_bag_dataloader(
-            root=config['data_root'],
-            split='val',
-            bag_size=config['bag_size'],
-            batch_size=config['mini_batch_size'],
-            shuffle=True,
-            train_indices=train_indices,
-            val_indices=val_indices
-        ).dataset
-        
-        # Create transforms with calculated statistics
-        transform_train = transforms.Compose([
-            transforms.Resize(64),
-            transforms.RandomCrop(64, padding=8),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(**channel_stats)
-        ])
-        
-        transform_test = transforms.Compose([
-            transforms.Resize(64),
-            transforms.ToTensor(),
-            transforms.Normalize(**channel_stats)
-        ])
-        
-        # Override dataset transforms
-        train_bag_dataset.transform = transform_train
-        val_bag_dataset.transform = transform_train
-        
-        # Create train loader from training bags
-        train_loader = DataLoader(
-            train_bag_dataset,
-            batch_size=config['mini_batch_size'],
-            shuffle=True,
-            num_workers=4,
-            pin_memory=True
+            val_indices=val_indices,
+            channel_stats=channel_stats
         )
         
-        # Create validation single-image loader
-        val_single_dataset = get_mifcm_single_image_dataloader(
+        # Create validation single-image loader with channel stats
+        val_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
             split='val',
             batch_size=100,
             shuffle=False,
             train_indices=train_indices,
-            val_indices=val_indices
-        ).dataset
-        
-        # Override single image dataset transform
-        val_single_dataset.transform = transform_test
-        
-        val_loader = DataLoader(
-            val_single_dataset,
-            batch_size=100,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True
+            val_indices=val_indices,
+            channel_stats=channel_stats
         )
         
-        # Create test loader for final evaluation
+        # Create test loader for final evaluation with channel stats
         test_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
             split='test',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            channel_stats=channel_stats
         )
-        
-        # Override test dataset transform
-        test_loader.dataset.transform = transform_test
         
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_mifcm_single_image_dataloader(
@@ -505,11 +456,9 @@ def train(config, log_dir=None):
             batch_size=100,
             shuffle=False,
             train_indices=train_indices,
-            val_indices=val_indices
+            val_indices=val_indices,
+            channel_stats=channel_stats
         )
-        
-        # Override train instance dataset transform
-        train_instance_loader.dataset.transform = transform_test
     elif config.get('dataset') == 'human_somatic_small':
         # For human_somatic_small, use pre-split validation as in llp_vat
         train_loader = get_human_somatic_small_bag_dataloader(

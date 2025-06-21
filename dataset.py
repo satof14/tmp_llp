@@ -349,14 +349,14 @@ class MIFCMBagDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='train', bag_size=5, transform=None, 
-                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None):
+                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None):
         self.bag_size = bag_size
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
         self.train_indices = train_indices
         self.val_indices = val_indices
-        # Initially set transform to None for dynamic calculation
+        self.channel_stats = channel_stats
         self.transform = transform
         
         # Build path to dataset
@@ -375,23 +375,15 @@ class MIFCMBagDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            # Use pre-computed indices if provided, otherwise compute them
-            if self.train_indices is not None and self.val_indices is not None:
-                train_idx, val_idx = self.train_indices, self.val_indices
-                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-            else:
-                # Split using unified splitter
-                train_idx, val_idx = DatasetSplitter.split_indices(
-                    len(all_data), val_split, random_seed, stratify=all_targets
-                )
-                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-            
+            # For train split, use provided train_indices
             if split == 'train':
-                self.data = [all_data[i] for i in train_idx]
-                self.targets = [all_targets[i] for i in train_idx]
+                if self.train_indices is None:
+                    raise ValueError("train_indices must be provided for train split")
+                self.data = [all_data[i] for i in self.train_indices]
+                self.targets = [all_targets[i] for i in self.train_indices]
             else:  # split == 'val'
-                self.data = [all_data[i] for i in val_idx]
-                self.targets = [all_targets[i] for i in val_idx]
+                # This should not be used for validation in the new setup
+                raise ValueError("MIFCMBagDataset should not be used for validation split")
                 
         else:  # split == 'test'
             # Load from test folder
@@ -415,6 +407,10 @@ class MIFCMBagDataset(Dataset):
         
         # Create bags
         self.bags = self._create_bags()
+        
+        # Set transform if not provided
+        if self.transform is None:
+            self.transform = self._get_default_transform(is_train=(split == 'train'))
     
     def get_training_bags_indices(self):
         """Get the indices used in training bags for channel stats calculation."""
@@ -438,19 +434,25 @@ class MIFCMBagDataset(Dataset):
         return data, targets
     
     def _get_default_transform(self, is_train):
+        if self.channel_stats is None:
+            raise ValueError("channel_stats must be provided")
+            
+        mean = self.channel_stats['mean']
+        std = self.channel_stats['std']
+            
         if is_train:
             return transforms.Compose([
                 transforms.Resize(64),
                 transforms.RandomCrop(64, padding=8),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
-                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                transforms.Normalize(mean, std)
             ])
         else:
             return transforms.Compose([
                 transforms.Resize(64),
                 transforms.ToTensor(),
-                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                transforms.Normalize(mean, std)
             ])
 
     def _create_bags(self):
@@ -537,13 +539,13 @@ class MIFCMSingleImageDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='test', transform=None, 
-                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None):
+                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
         self.train_indices = train_indices
         self.val_indices = val_indices
-        # Initially set transform to None for dynamic calculation
+        self.channel_stats = channel_stats
         self.transform = transform
         
         # Build path to dataset
@@ -560,23 +562,16 @@ class MIFCMSingleImageDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            # Use pre-computed indices if provided, otherwise compute them
-            if self.train_indices is not None and self.val_indices is not None:
-                train_idx, val_idx = self.train_indices, self.val_indices
-                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-            else:
-                # Split using unified splitter
-                train_idx, val_idx = DatasetSplitter.split_indices(
-                    len(all_data), val_split, random_seed, stratify=all_targets
-                )
-                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-            
             if split == 'train':
-                self.data = [all_data[i] for i in train_idx]
-                self.targets = [all_targets[i] for i in train_idx]
+                if self.train_indices is None:
+                    raise ValueError("train_indices must be provided for train split")
+                self.data = [all_data[i] for i in self.train_indices]
+                self.targets = [all_targets[i] for i in self.train_indices]
             else:  # split == 'val'
-                self.data = [all_data[i] for i in val_idx]
-                self.targets = [all_targets[i] for i in val_idx]
+                if self.val_indices is None:
+                    raise ValueError("val_indices must be provided for val split")
+                self.data = [all_data[i] for i in self.val_indices]
+                self.targets = [all_targets[i] for i in self.val_indices]
                 
         else:  # split == 'test'
             # Load from test folder
@@ -590,6 +585,10 @@ class MIFCMSingleImageDataset(Dataset):
                             img_path = os.path.join(label_path, file)
                             self.data.append(img_path)
                             self.targets.append(label_idx)
+        
+        # Set transform if not provided
+        if self.transform is None:
+            self.transform = self._get_default_transform()
         
     def _load_images_from_path(self, path, label_mapping):
         """Load images and labels from directory structure."""
@@ -606,10 +605,16 @@ class MIFCMSingleImageDataset(Dataset):
         return data, targets
     
     def _get_default_transform(self):
+        if self.channel_stats is None:
+            raise ValueError("channel_stats must be provided")
+            
+        mean = self.channel_stats['mean']
+        std = self.channel_stats['std']
+        
         return transforms.Compose([
             transforms.Resize(64),
             transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            transforms.Normalize(mean, std)
         ])
     
     def __len__(self):
@@ -629,7 +634,7 @@ class MIFCMSingleImageDataset(Dataset):
 
 def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
                              num_workers=4, shuffle=True, val_split=0.2, random_seed=42,
-                             train_indices=None, val_indices=None):
+                             train_indices=None, val_indices=None, channel_stats=None):
     """Get dataloader for MIFCM bag-level training.
     
     Args:
@@ -643,10 +648,12 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
         random_seed: Random seed for reproducible train/val split
         train_indices: Pre-computed training indices (optional)
         val_indices: Pre-computed validation indices (optional)
+        channel_stats: Channel statistics for normalization (required)
     """
     dataset = MIFCMBagDataset(root=root, split=split, bag_size=bag_size, 
                               val_split=val_split, random_seed=random_seed,
-                              train_indices=train_indices, val_indices=val_indices)
+                              train_indices=train_indices, val_indices=val_indices,
+                              channel_stats=channel_stats)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -659,7 +666,7 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
 
 def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=100, 
                                       num_workers=4, shuffle=False, val_split=0.2, random_seed=42,
-                                      train_indices=None, val_indices=None):
+                                      train_indices=None, val_indices=None, channel_stats=None):
     """Get dataloader for MIFCM single image evaluation.
     
     Args:
@@ -672,10 +679,12 @@ def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=10
         random_seed: Random seed for reproducible train/val split
         train_indices: Pre-computed training indices (optional)
         val_indices: Pre-computed validation indices (optional)
+        channel_stats: Channel statistics for normalization (required)
     """
     dataset = MIFCMSingleImageDataset(root=root, split=split, 
                                       val_split=val_split, random_seed=random_seed,
-                                      train_indices=train_indices, val_indices=val_indices)
+                                      train_indices=train_indices, val_indices=val_indices,
+                                      channel_stats=channel_stats)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
