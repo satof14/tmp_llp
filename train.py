@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader
+from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter
 from collections import Counter
 
 
@@ -340,35 +340,6 @@ def evaluate(model, dataloader, device):
     return accuracy
 
 
-def train_valid_split(dataset, valid_ratio, seed):
-    """Split dataset into train and validation sets."""
-    torch.manual_seed(seed)
-    valid_size = int(valid_ratio * len(dataset))
-    train_size = len(dataset) - valid_size
-    train, valid = random_split(dataset, [train_size, valid_size])
-    return train, valid
-
-
-def check_train_val_overlap(train_indices, val_indices, dataset_name="dataset"):
-    """Check if there's any overlap between train and validation indices."""
-    train_set = set(train_indices)
-    val_set = set(val_indices)
-    
-    overlap = train_set.intersection(val_set)
-    
-    if len(overlap) > 0:
-        print(f"\n{'='*60}")
-        print(f"ERROR: Found {len(overlap)} overlapping indices between train and validation sets!")
-        print(f"Train set size: {len(train_set)}, Validation set size: {len(val_set)}")
-        print(f"Overlapping indices (first 10): {list(overlap)[:10]}")
-        print(f"{'='*60}\n")
-        raise ValueError(f"Train and validation sets have {len(overlap)} overlapping indices. This will lead to data leakage!")
-    else:
-        print(f"\n{'='*60}")
-        print(f"✓ No overlap found between train and validation sets for {dataset_name}")
-        print(f"  Train set size: {len(train_set)} unique indices")
-        print(f"  Validation set size: {len(val_set)} unique indices")
-        print(f"{'='*60}\n")
 
 
 def train(config, log_dir=None):
@@ -414,12 +385,16 @@ def train(config, log_dir=None):
             shuffle=True
         ).dataset
         
-        # Split bags for training and validation
-        train_bags, valid_bags = train_valid_split(
-            full_bag_dataset, 
+        # Split bags for training and validation using unified splitter
+        train_idx, val_idx = DatasetSplitter.split_indices(
+            len(full_bag_dataset), 
             config.get('valid_ratio', 0.1), 
             config.get('seed', 42)
         )
+        DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+        
+        train_bags = Subset(full_bag_dataset, train_idx)
+        valid_bags = Subset(full_bag_dataset, val_idx)
         
         # Create train loader from training bags
         train_loader = DataLoader(
@@ -445,7 +420,7 @@ def train(config, log_dir=None):
             train_single_images_for_check.extend(bag['indices'])
         
         # Check for overlap between train and validation sets
-        check_train_val_overlap(train_single_images_for_check, val_single_images, "MIFCM")
+        DatasetSplitter.verify_no_overlap(train_single_images_for_check, val_single_images)
         
         # Create single image dataset and subset it
         mifcm_single_dataset = get_mifcm_single_image_dataloader(
@@ -522,12 +497,16 @@ def train(config, log_dir=None):
             shuffle=True
         ).dataset
         
-        # Split bags for training and validation
-        train_bags, valid_bags = train_valid_split(
-            full_bag_dataset, 
+        # Split bags for training and validation using unified splitter
+        train_idx, val_idx = DatasetSplitter.split_indices(
+            len(full_bag_dataset), 
             config.get('valid_ratio', 0.1), 
             config.get('seed', 42)
         )
+        DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+        
+        train_bags = Subset(full_bag_dataset, train_idx)
+        valid_bags = Subset(full_bag_dataset, val_idx)
         
         # Create train loader from training bags
         train_loader = DataLoader(
@@ -553,7 +532,7 @@ def train(config, log_dir=None):
             train_single_images_for_check.extend(bag['indices'])
         
         # Check for overlap between train and validation sets
-        check_train_val_overlap(train_single_images_for_check, val_single_images, "CIFAR-10")
+        DatasetSplitter.verify_no_overlap(train_single_images_for_check, val_single_images)
         
         # Create single image dataset and subset it
         cifar_single_dataset = get_single_image_dataloader(

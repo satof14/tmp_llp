@@ -10,6 +10,50 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 
+class DatasetSplitter:
+    """Unified dataset splitter for train/validation splits."""
+    
+    @staticmethod
+    def split_indices(dataset_size, valid_ratio=0.1, seed=42, stratify=None):
+        """Split dataset indices into train/validation sets.
+        
+        Args:
+            dataset_size: Size of the dataset
+            valid_ratio: Ratio of validation data (default: 0.1)
+            seed: Random seed for reproducibility
+            stratify: Labels for stratified splitting (optional)
+        
+        Returns:
+            train_indices, val_indices
+        """
+        indices = list(range(dataset_size))
+        
+        if stratify is not None:
+            # Stratified split
+            train_idx, val_idx = train_test_split(
+                indices, test_size=valid_ratio, random_state=seed, stratify=stratify
+            )
+        else:
+            # Random split
+            torch.manual_seed(seed)
+            val_size = int(valid_ratio * dataset_size)
+            train_size = dataset_size - val_size
+            train_idx, val_idx = torch.randperm(dataset_size).split([train_size, val_size])
+            train_idx, val_idx = train_idx.tolist(), val_idx.tolist()
+        
+        return train_idx, val_idx
+    
+    @staticmethod
+    def verify_no_overlap(train_indices, val_indices):
+        """Quick overlap check."""
+        overlap = set(train_indices) & set(val_indices)
+        if overlap:
+            raise ValueError(f"Found {len(overlap)} overlapping indices!")
+        else:
+            print(f"No overlap found between train ({len(train_indices)}) and validation ({len(val_indices)}) indices")
+        return True
+
+
 class CIFAR10BagDataset(Dataset):
     """CIFAR-10 dataset for bag-level training with label proportions."""
     
@@ -197,32 +241,22 @@ class MIFCMBagDataset(Dataset):
         
         # Load data based on split
         if split in ['train', 'val']:
-            # Load from train folder and split
+            # Load all data from train folder
             train_path = os.path.join(dataset_path, "train")
-            all_data = []
-            all_targets = []
+            all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            for label_name in os.listdir(train_path):
-                label_path = os.path.join(train_path, label_name)
-                if os.path.isdir(label_path) and label_name in label_mapping:
-                    label_idx = label_mapping[label_name]
-                    for file in os.listdir(label_path):
-                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                            img_path = os.path.join(label_path, file)
-                            all_data.append(img_path)
-                            all_targets.append(label_idx)
-            
-            # Split data into train and validation
-            train_data, val_data, train_targets, val_targets = self._split_data(
-                all_data, all_targets, val_split, random_seed
+            # Split using unified splitter
+            train_idx, val_idx = DatasetSplitter.split_indices(
+                len(all_data), val_split, random_seed, stratify=all_targets
             )
+            DatasetSplitter.verify_no_overlap(train_idx, val_idx)
             
             if split == 'train':
-                self.data = train_data
-                self.targets = train_targets
+                self.data = [all_data[i] for i in train_idx]
+                self.targets = [all_targets[i] for i in train_idx]
             else:  # split == 'val'
-                self.data = val_data
-                self.targets = val_targets
+                self.data = [all_data[i] for i in val_idx]
+                self.targets = [all_targets[i] for i in val_idx]
                 
         else:  # split == 'test'
             # Load from test folder
@@ -246,15 +280,20 @@ class MIFCMBagDataset(Dataset):
         
         # Create bags
         self.bags = self._create_bags()
-        
-    def _split_data(self, data, targets, val_split, random_seed):
-        """Split data into train and validation sets while preserving class distribution."""
-        train_data, val_data, train_targets, val_targets = train_test_split(
-            data, targets, test_size=val_split, random_state=random_seed,
-            stratify=targets  # Preserve class distribution
-        )
-        
-        return train_data, val_data, train_targets, val_targets
+    
+    def _load_images_from_path(self, path, label_mapping):
+        """Load images and labels from directory structure."""
+        data, targets = [], []
+        for label_name in os.listdir(path):
+            label_path = os.path.join(path, label_name)
+            if os.path.isdir(label_path) and label_name in label_mapping:
+                label_idx = label_mapping[label_name]
+                for file in os.listdir(label_path):
+                    if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                        img_path = os.path.join(label_path, file)
+                        data.append(img_path)
+                        targets.append(label_idx)
+        return data, targets
     
     def _get_default_transform(self, is_train):
         if is_train:
