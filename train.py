@@ -739,7 +739,7 @@ def train(config, log_dir=None):
             
             elapsed_time = time.time() - start_time
             print(f'[Epoch {epoch}/{config["epochs"]}] Train Instance Accuracy: {train_instance_accuracy:.4f} (Best: {best_train_instance_accuracy:.4f} @ Epoch {best_train_instance_epoch})')
-            print(f'[Epoch {epoch}/{config["epochs"]}]            Val Accuracy: {valid_accuracy:.4f} (Best: {best_valid_accuracy:.4f} @ Epoch {best_valid_epoch})')
+            print(f'[Epoch {epoch}/{config["epochs"]}]     Validation Accuracy: {valid_accuracy:.4f} (Best: {best_valid_accuracy:.4f} @ Epoch {best_valid_epoch})')
             print(f'[Epoch {epoch}/{config["epochs"]}]           Test Accuracy: {test_accuracy:.4f} (Best: {best_test_accuracy:.4f} @ Epoch {best_test_epoch})')
             
             # Log to tensorboard
