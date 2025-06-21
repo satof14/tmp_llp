@@ -417,13 +417,12 @@ def train(config, log_dir=None):
         channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
         print("Channel stats:", channel_stats)
         
-        # Save channel stats to file
-        stats_dir = os.path.join(config['data_root'], 'channel_stats')
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_file = os.path.join(stats_dir, 'channel_stats.json')
-        with open(stats_file, 'w') as f:
-            json.dump(channel_stats, f, indent=4)
-        print(f"Channel stats saved to: {stats_file}")
+        # Save channel stats to file in results directory
+        if log_dir:
+            stats_file = os.path.join(log_dir, 'channel_stats.json')
+            with open(stats_file, 'w') as f:
+                json.dump(channel_stats, f, indent=4)
+            print(f"Channel stats saved to: {stats_file}")
         
         # Create train bag dataloader with channel stats
         train_loader = get_mifcm_bag_dataloader(
@@ -490,13 +489,12 @@ def train(config, log_dir=None):
         channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
         print("Channel stats:", channel_stats)
         
-        # Save channel stats to file
-        stats_dir = os.path.join(config['data_root'], 'channel_stats')
-        os.makedirs(stats_dir, exist_ok=True)
-        stats_file = os.path.join(stats_dir, 'channel_stats.json')
-        with open(stats_file, 'w') as f:
-            json.dump(channel_stats, f, indent=4)
-        print(f"Channel stats saved to: {stats_file}")
+        # Save channel stats to file in results directory
+        if log_dir:
+            stats_file = os.path.join(log_dir, 'channel_stats.json')
+            with open(stats_file, 'w') as f:
+                json.dump(channel_stats, f, indent=4)
+            print(f"Channel stats saved to: {stats_file}")
         
         # Create train bag dataloader with channel stats
         train_loader = get_human_somatic_small_bag_dataloader(
