@@ -295,11 +295,13 @@ class MIFCMBagDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='train', bag_size=5, transform=None, 
-                 val_split=0.2, random_seed=42):
+                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None):
         self.bag_size = bag_size
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
+        self.train_indices = train_indices
+        self.val_indices = val_indices
         # Initially set transform to None for dynamic calculation
         self.transform = transform
         
@@ -319,11 +321,16 @@ class MIFCMBagDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            # Split using unified splitter
-            train_idx, val_idx = DatasetSplitter.split_indices(
-                len(all_data), val_split, random_seed, stratify=all_targets
-            )
-            DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+            # Use pre-computed indices if provided, otherwise compute them
+            if self.train_indices is not None and self.val_indices is not None:
+                train_idx, val_idx = self.train_indices, self.val_indices
+                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+            else:
+                # Split using unified splitter
+                train_idx, val_idx = DatasetSplitter.split_indices(
+                    len(all_data), val_split, random_seed, stratify=all_targets
+                )
+                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
             
             if split == 'train':
                 self.data = [all_data[i] for i in train_idx]
@@ -476,10 +483,12 @@ class MIFCMSingleImageDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='test', transform=None, 
-                 val_split=0.2, random_seed=42):
+                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
+        self.train_indices = train_indices
+        self.val_indices = val_indices
         # Initially set transform to None for dynamic calculation
         self.transform = transform
         
@@ -497,11 +506,16 @@ class MIFCMSingleImageDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            # Split using unified splitter
-            train_idx, val_idx = DatasetSplitter.split_indices(
-                len(all_data), val_split, random_seed, stratify=all_targets
-            )
-            DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+            # Use pre-computed indices if provided, otherwise compute them
+            if self.train_indices is not None and self.val_indices is not None:
+                train_idx, val_idx = self.train_indices, self.val_indices
+                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
+            else:
+                # Split using unified splitter
+                train_idx, val_idx = DatasetSplitter.split_indices(
+                    len(all_data), val_split, random_seed, stratify=all_targets
+                )
+                DatasetSplitter.verify_no_overlap(train_idx, val_idx)
             
             if split == 'train':
                 self.data = [all_data[i] for i in train_idx]
@@ -560,7 +574,8 @@ class MIFCMSingleImageDataset(Dataset):
 
 
 def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
-                             num_workers=4, shuffle=True, val_split=0.2, random_seed=42):
+                             num_workers=4, shuffle=True, val_split=0.2, random_seed=42,
+                             train_indices=None, val_indices=None):
     """Get dataloader for MIFCM bag-level training.
     
     Args:
@@ -572,9 +587,12 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
         shuffle: Whether to shuffle the data
         val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
         random_seed: Random seed for reproducible train/val split
+        train_indices: Pre-computed training indices (optional)
+        val_indices: Pre-computed validation indices (optional)
     """
     dataset = MIFCMBagDataset(root=root, split=split, bag_size=bag_size, 
-                              val_split=val_split, random_seed=random_seed)
+                              val_split=val_split, random_seed=random_seed,
+                              train_indices=train_indices, val_indices=val_indices)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -586,7 +604,8 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
 
 
 def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=100, 
-                                      num_workers=4, shuffle=False, val_split=0.2, random_seed=42):
+                                      num_workers=4, shuffle=False, val_split=0.2, random_seed=42,
+                                      train_indices=None, val_indices=None):
     """Get dataloader for MIFCM single image evaluation.
     
     Args:
@@ -597,9 +616,12 @@ def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=10
         shuffle: Whether to shuffle the data
         val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
         random_seed: Random seed for reproducible train/val split
+        train_indices: Pre-computed training indices (optional)
+        val_indices: Pre-computed validation indices (optional)
     """
     dataset = MIFCMSingleImageDataset(root=root, split=split, 
-                                      val_split=val_split, random_seed=random_seed)
+                                      val_split=val_split, random_seed=random_seed,
+                                      train_indices=train_indices, val_indices=val_indices)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

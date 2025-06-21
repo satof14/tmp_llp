@@ -377,18 +377,66 @@ def train(config, log_dir=None):
     
     # Create dataloaders with train/valid split
     if config.get('dataset') == 'mifcm_3classes_newgate':
-        # Create full bag dataset and split for training/validation
-        full_bag_dataset = get_mifcm_bag_dataloader(
+        # First, load all training data to get indices for train/valid split
+        from dataset import MIFCMSingleImageDataset
+        import os
+        
+        # Load all training data paths to determine train/valid split indices
+        dataset_path = os.path.join(config['data_root'], "dataset_preprocessed_mokushi_screening_3classes_train_test")
+        train_path = os.path.join(dataset_path, "train")
+        
+        all_data = []
+        all_targets = []
+        label_mapping = {'G1': 0, 'S': 1, 'G2': 2}
+        
+        # Load all training data
+        for label_name in os.listdir(train_path):
+            label_path = os.path.join(train_path, label_name)
+            if os.path.isdir(label_path) and label_name in label_mapping:
+                label_idx = label_mapping[label_name]
+                for file in os.listdir(label_path):
+                    if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                        img_path = os.path.join(label_path, file)
+                        all_data.append(img_path)
+                        all_targets.append(label_idx)
+        
+        # Split indices for train/validation using unified splitter
+        train_indices, val_indices = DatasetSplitter.split_indices(
+            len(all_data), 
+            config.get('valid_ratio', 0.1), 
+            config.get('seed', 42),
+            stratify=all_targets
+        )
+        DatasetSplitter.verify_no_overlap(train_indices, val_indices)
+        
+        print(f"Total training images: {len(all_data)}")
+        print(f"Train split: {len(train_indices)} images")
+        print(f"Valid split: {len(val_indices)} images")
+        
+        # Create train and validation bag datasets using pre-split indices
+        train_bag_dataset = get_mifcm_bag_dataloader(
             root=config['data_root'],
             split='train',
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
-            shuffle=True
+            shuffle=True,
+            train_indices=train_indices,
+            val_indices=val_indices
+        ).dataset
+        
+        val_bag_dataset = get_mifcm_bag_dataloader(
+            root=config['data_root'],
+            split='val',
+            bag_size=config['bag_size'],
+            batch_size=config['mini_batch_size'],
+            shuffle=True,
+            train_indices=train_indices,
+            val_indices=val_indices
         ).dataset
         
         # Calculate channel statistics from training bags only
-        train_bags_indices = full_bag_dataset.get_training_bags_indices()
-        channel_stats = compute_channel_stats_from_bags(full_bag_dataset, train_bags_indices)
+        train_bags_indices = train_bag_dataset.get_training_bags_indices()
+        channel_stats = compute_channel_stats_from_bags(train_bag_dataset, train_bags_indices)
         print("Channel stats:", channel_stats)
         
         # Create transforms with calculated statistics
@@ -407,57 +455,30 @@ def train(config, log_dir=None):
         ])
         
         # Override dataset transforms
-        full_bag_dataset.transform = transform_train
-        
-        # Split bags for training and validation using unified splitter
-        train_idx, val_idx = DatasetSplitter.split_indices(
-            len(full_bag_dataset), 
-            config.get('valid_ratio', 0.1), 
-            config.get('seed', 42)
-        )
-        DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-        
-        train_bags = Subset(full_bag_dataset, train_idx)
-        valid_bags = Subset(full_bag_dataset, val_idx)
+        train_bag_dataset.transform = transform_train
+        val_bag_dataset.transform = transform_train
         
         # Create train loader from training bags
         train_loader = DataLoader(
-            train_bags,
+            train_bag_dataset,
             batch_size=config['mini_batch_size'],
             shuffle=True,
             num_workers=4,
             pin_memory=True
         )
         
-        # For validation, create single-image loader from validation bags
-        val_single_images = []
-        val_single_labels = []
-        for bag_idx in valid_bags.indices:
-            bag = full_bag_dataset.bags[bag_idx]
-            val_single_images.extend(bag['indices'])
-            val_single_labels.extend(bag['labels'])
-        
-        # Collect training indices for overlap check
-        train_single_images_for_check = []
-        for bag_idx in train_bags.indices:
-            bag = full_bag_dataset.bags[bag_idx]
-            train_single_images_for_check.extend(bag['indices'])
-        
-        # Check for overlap between train and validation sets
-        DatasetSplitter.verify_no_overlap(train_single_images_for_check, val_single_images)
-        
-        # Create single image dataset and subset it
-        mifcm_single_dataset = get_mifcm_single_image_dataloader(
+        # Create validation single-image loader
+        val_single_dataset = get_mifcm_single_image_dataloader(
             root=config['data_root'],
-            split='train',
+            split='val',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            train_indices=train_indices,
+            val_indices=val_indices
         ).dataset
         
         # Override single image dataset transform
-        mifcm_single_dataset.transform = transform_test
-        
-        val_single_dataset = Subset(mifcm_single_dataset, val_single_images)
+        val_single_dataset.transform = transform_test
         
         val_loader = DataLoader(
             val_single_dataset,
@@ -483,7 +504,9 @@ def train(config, log_dir=None):
             root=config['data_root'],
             split='train',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            train_indices=train_indices,
+            val_indices=val_indices
         )
         
         # Override train instance dataset transform
@@ -638,8 +661,8 @@ def train(config, log_dir=None):
     val_size = len(val_loader.dataset)
     if len(train_instance_loader.dataset) > val_size:
         # Use train bags to create a subset that matches validation size
-        if config.get('dataset') == 'human_somatic_small':
-            # For human_somatic_small, use random subset
+        if config.get('dataset') == 'human_somatic_small' or config.get('dataset') == 'mifcm_3classes_newgate':
+            # For human_somatic_small and mifcm_3classes_newgate, use random subset
             indices = torch.randperm(len(train_instance_loader.dataset))[:val_size]
             subset_dataset = Subset(train_instance_loader.dataset, indices)
         else:
