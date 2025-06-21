@@ -31,7 +31,7 @@ def evaluate_model(model_path, config=None, device=None):
     # Load channel stats for MIFCM and Human Somatic Small datasets
     channel_stats = None
     if config.get('dataset') in ['mifcm_3classes_newgate', 'human_somatic_small']:
-        channel_stats_path = os.path.join(config['data_root'], 'channel_stats.json')
+        channel_stats_path = os.path.join(model_path, 'channel_stats.json')
         if os.path.exists(channel_stats_path):
             with open(channel_stats_path, 'r') as f:
                 channel_stats = json.load(f)
