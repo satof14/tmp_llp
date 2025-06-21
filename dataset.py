@@ -95,10 +95,18 @@ class CIFAR10BagDataset(Dataset):
     def _create_bags(self):
         bags = []
         
+        # Create a copy of class_indices to track remaining samples
+        remaining_class_indices = {k: list(v) for k, v in self.class_indices.items()}
+        
         # Create balanced bags with known proportions
         num_bags = len(self.cifar10) // self.bag_size
         
         for _ in range(num_bags):
+            # Check if we have enough samples left
+            total_remaining = sum(len(indices) for indices in remaining_class_indices.values())
+            if total_remaining < self.bag_size:
+                break
+                
             # Randomly sample distribution of classes in the bag
             proportions = np.random.dirichlet(np.ones(self.num_classes))
             
@@ -108,10 +116,12 @@ class CIFAR10BagDataset(Dataset):
             # Adjust counts to ensure sum equals bag_size
             diff = self.bag_size - counts.sum()
             if diff > 0:
-                # Add to random classes
-                indices = np.random.choice(self.num_classes, diff, replace=False)
-                for idx in indices:
-                    counts[idx] += 1
+                # Add to random classes with available samples
+                available_classes = [i for i in range(self.num_classes) if len(remaining_class_indices[i]) > counts[i]]
+                if len(available_classes) >= diff:
+                    indices = np.random.choice(available_classes, diff, replace=False)
+                    for idx in indices:
+                        counts[idx] += 1
             elif diff < 0:
                 # Remove from random classes with count > 0
                 nonzero_indices = np.where(counts > 0)[0]
@@ -119,15 +129,29 @@ class CIFAR10BagDataset(Dataset):
                 for idx in indices:
                     counts[idx] -= 1
             
+            # Check if we have enough samples for each class
+            valid_bag = True
+            for class_idx, count in enumerate(counts):
+                if count > len(remaining_class_indices[class_idx]):
+                    valid_bag = False
+                    break
+            
+            if not valid_bag:
+                break
+            
             # Sample images according to counts
             bag_indices = []
             bag_labels = []
             
             for class_idx, count in enumerate(counts):
                 if count > 0:
-                    sampled_indices = random.sample(self.class_indices[class_idx], count)
+                    sampled_indices = random.sample(remaining_class_indices[class_idx], count)
                     bag_indices.extend(sampled_indices)
                     bag_labels.extend([class_idx] * count)
+                    
+                    # Remove sampled indices from remaining
+                    for idx in sampled_indices:
+                        remaining_class_indices[class_idx].remove(idx)
             
             # Calculate actual proportions
             actual_proportions = np.zeros(self.num_classes)
@@ -411,32 +435,22 @@ class MIFCMSingleImageDataset(Dataset):
         
         # Load data based on split
         if split in ['train', 'val']:
-            # Load from train folder and split
+            # Load all data from train folder
             train_path = os.path.join(dataset_path, "train")
-            all_data = []
-            all_targets = []
+            all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            for label_name in os.listdir(train_path):
-                label_path = os.path.join(train_path, label_name)
-                if os.path.isdir(label_path) and label_name in label_mapping:
-                    label_idx = label_mapping[label_name]
-                    for file in os.listdir(label_path):
-                        if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
-                            img_path = os.path.join(label_path, file)
-                            all_data.append(img_path)
-                            all_targets.append(label_idx)
-            
-            # Split data into train and validation
-            train_data, val_data, train_targets, val_targets = self._split_data(
-                all_data, all_targets, val_split, random_seed
+            # Split using unified splitter
+            train_idx, val_idx = DatasetSplitter.split_indices(
+                len(all_data), val_split, random_seed, stratify=all_targets
             )
+            DatasetSplitter.verify_no_overlap(train_idx, val_idx)
             
             if split == 'train':
-                self.data = train_data
-                self.targets = train_targets
+                self.data = [all_data[i] for i in train_idx]
+                self.targets = [all_targets[i] for i in train_idx]
             else:  # split == 'val'
-                self.data = val_data
-                self.targets = val_targets
+                self.data = [all_data[i] for i in val_idx]
+                self.targets = [all_targets[i] for i in val_idx]
                 
         else:  # split == 'test'
             # Load from test folder
@@ -451,14 +465,19 @@ class MIFCMSingleImageDataset(Dataset):
                             self.data.append(img_path)
                             self.targets.append(label_idx)
         
-    def _split_data(self, data, targets, val_split, random_seed):
-        """Split data into train and validation sets while preserving class distribution."""
-        train_data, val_data, train_targets, val_targets = train_test_split(
-            data, targets, test_size=val_split, random_state=random_seed,
-            stratify=targets  # Preserve class distribution
-        )
-        
-        return train_data, val_data, train_targets, val_targets
+    def _load_images_from_path(self, path, label_mapping):
+        """Load images and labels from directory structure."""
+        data, targets = [], []
+        for label_name in os.listdir(path):
+            label_path = os.path.join(path, label_name)
+            if os.path.isdir(label_path) and label_name in label_mapping:
+                label_idx = label_mapping[label_name]
+                for file in os.listdir(label_path):
+                    if file.lower().endswith(('.jpg', '.jpeg', '.png', '.tif', '.tiff')):
+                        img_path = os.path.join(label_path, file)
+                        data.append(img_path)
+                        targets.append(label_idx)
+        return data, targets
     
     def _get_default_transform(self):
         return transforms.Compose([
