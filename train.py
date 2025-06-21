@@ -280,7 +280,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
     total_loss = 0
     num_batches = 0
     
-    pbar = tqdm(dataloader, desc=f'Epoch {epoch}', file=sys.__stdout__, ncols=80)
+    pbar = tqdm(dataloader, file=sys.__stdout__, ncols=80)
     for batch_idx, (images, proportions) in enumerate(pbar):
         images = images.to(device)
         proportions = proportions.to(device)
