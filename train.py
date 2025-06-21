@@ -576,7 +576,7 @@ def train(config, log_dir=None):
         # For validation, create single-image loader from validation indices
         val_loader = get_single_image_dataloader(
             root=config['data_root'],
-            train=True,
+            split='val',
             batch_size=100,
             shuffle=False,
             indices=val_indices
@@ -585,7 +585,7 @@ def train(config, log_dir=None):
         # Create test loader for final evaluation
         test_loader = get_single_image_dataloader(
             root=config['data_root'],
-            train=False,
+            split='test',
             batch_size=100,
             shuffle=False
         )
@@ -593,7 +593,7 @@ def train(config, log_dir=None):
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_single_image_dataloader(
             root=config['data_root'],
-            train=True,
+            split='train',
             batch_size=100,
             shuffle=False,
             indices=train_indices,

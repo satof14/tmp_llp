@@ -254,24 +254,36 @@ class CIFAR10BagDataset(Dataset):
 class CIFAR10SingleImageDataset(Dataset):
     """CIFAR-10 dataset for single image evaluation."""
     
-    def __init__(self, root='./data', train=False, transform=None, download=True, indices=None, max_samples=None):
+    def __init__(self, root='./data', split='test', transform=None, download=True, indices=None, max_samples=None):
+        self.split = split
         self.transform = transform if transform else self._get_default_transform()
         self.indices = indices
         
-        # Load full CIFAR-10 dataset
-        self.cifar10 = torchvision.datasets.CIFAR10(
-            root=root, train=train, download=download, transform=self.transform
-        )
+        # For train/val splits, indices must be provided
+        if split in ['train', 'val'] and indices is None:
+            raise ValueError(f"indices must be provided for {split} split")
+
+        # Determine which CIFAR-10 dataset to load based on split
+        if split in ['train', 'val']:
+            # For train/val, load the training dataset
+            self.cifar10 = torchvision.datasets.CIFAR10(
+                root=root, train=True, download=download, transform=self.transform
+            )
+        else:  # split == 'test'
+            # For test, load the test dataset
+            self.cifar10 = torchvision.datasets.CIFAR10(
+                root=root, train=False, download=download, transform=self.transform
+            )
         
-        # Indices must be provided for single image dataset
-        if indices is None:
-            raise ValueError("indices must be provided for CIFAR10SingleImageDataset")
-        
-        # If max_samples is specified and we have more samples than needed, subsample first
-        if max_samples is not None and len(indices) > max_samples:
-            self.data_indices = random.sample(indices, max_samples)
+        # For test split, use None to indicate all data should be used
+        if split == 'test':
+            self.data_indices = None
         else:
-            self.data_indices = indices
+            # If max_samples is specified and we have more samples than needed, subsample first
+            if max_samples is not None and indices and len(indices) > max_samples:
+                self.data_indices = random.sample(indices, max_samples)
+            else:
+                self.data_indices = indices
         
     def _get_default_transform(self):
         return transforms.Compose([
@@ -280,11 +292,16 @@ class CIFAR10SingleImageDataset(Dataset):
         ])
     
     def __len__(self):
+        if self.data_indices is None:
+            return len(self.cifar10)
         return len(self.data_indices)
     
     def __getitem__(self, idx):
         # Map to actual CIFAR-10 index
-        actual_idx = self.data_indices[idx]
+        if self.data_indices is None:
+            actual_idx = idx
+        else:
+            actual_idx = self.data_indices[idx]
         img, label = self.cifar10[actual_idx]
         # Add batch dimension to match bag format
         img = img.unsqueeze(0)  # (1, C, H, W)
@@ -306,10 +323,10 @@ def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2,
     return dataloader
 
 
-def get_single_image_dataloader(root='./data', train=False, batch_size=100, 
+def get_single_image_dataloader(root='./data', split='test', batch_size=100, 
                                 num_workers=4, shuffle=False, indices=None, max_samples=None):
     """Get dataloader for single image evaluation."""
-    dataset = CIFAR10SingleImageDataset(root=root, train=train, indices=indices, max_samples=max_samples)
+    dataset = CIFAR10SingleImageDataset(root=root, split=split, indices=indices, max_samples=max_samples)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
