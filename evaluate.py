@@ -6,6 +6,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
+import argparse
+import os
 
 from model import LLPAttentionModel
 from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader
@@ -158,8 +160,24 @@ def analyze_predictions(results, num_examples=10):
 
 
 if __name__ == '__main__':
-    # Evaluate the best model
-    results = evaluate_model('best_model.pth')
+    parser = argparse.ArgumentParser(description='Evaluate a trained LLP model')
+    parser.add_argument('--results-dir', type=str, required=True,
+                        help='Path to the results directory containing the model checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='best_model.pth',
+                        help='Name of the checkpoint file (default: best_model.pth)')
+    args = parser.parse_args()
+    
+    # Construct full model path
+    model_path = os.path.join(args.results_dir, args.checkpoint)
+    
+    # Check if model exists
+    if not os.path.exists(model_path):
+        print(f"Error: Model checkpoint not found at {model_path}")
+        sys.exit(1)
+    
+    # Evaluate the model
+    print(f"Evaluating model: {model_path}")
+    results = evaluate_model(model_path)
     
     # Analyze predictions
     analyze_predictions(results)
