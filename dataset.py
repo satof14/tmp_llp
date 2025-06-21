@@ -10,6 +10,55 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 
+def compute_channel_stats_from_bags(dataset, bags):
+    """
+    Calculates per-channel mean and std from images in the given bags.
+    """
+    import numpy as np
+    from PIL import Image
+
+    print("Calculating channel statistics from provided bags of images...")
+
+    flat_indices = [idx for bag in bags for idx in bag]
+    if not flat_indices:
+        raise ValueError("No images found in the provided bags.")
+
+    sums = np.zeros(3, dtype=np.float64)
+    sums_sq = np.zeros(3, dtype=np.float64)
+    total_pixels = 0
+
+    for idx in flat_indices:
+        img_path = dataset.data[idx]
+        with Image.open(img_path) as img:
+            img = img.convert('RGB')
+            arr = np.array(img, dtype=np.float32) / 255.0
+        h, w, _ = arr.shape
+        sums += arr.sum(axis=(0,1))
+        sums_sq += (arr**2).sum(axis=(0,1))
+        total_pixels += h * w
+
+    print(f"[Calculating stats] Number of bags: {len(bags)}")
+    print(f"[Calculating stats] Number of images: {len(flat_indices)}")
+    print(f"[Calculating stats] Number of pixels: {total_pixels}")
+    print(f"[Calculating stats] Sum of pixel values per channel: {sums}")
+    print(f"[Calculating stats] Sum of squared pixel values per channel: {sums_sq}")
+
+    mean = sums / total_pixels
+    var  = sums_sq / total_pixels - mean**2
+
+    # clip negative variance due to floating point errors
+    var  = np.clip(var, 0, None)
+    std  = np.sqrt(var)
+    # avoid zero std channels to prevent division by zero
+    std = np.where(std == 0, 1e-6, std)
+
+    # cast to float32 for compatibility
+    return {
+        'mean': mean.astype(np.float32).tolist(),
+        'std' : std.astype(np.float32).tolist()
+    }
+
+
 class DatasetSplitter:
     """Unified dataset splitter for train/validation splits."""
     
@@ -251,7 +300,8 @@ class MIFCMBagDataset(Dataset):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
-        self.transform = transform if transform else self._get_default_transform(split == 'train')
+        # Initially set transform to None for dynamic calculation
+        self.transform = transform
         
         # Build path to dataset
         dataset_path = os.path.join(root, "dataset_preprocessed_mokushi_screening_3classes_train_test")
@@ -304,6 +354,13 @@ class MIFCMBagDataset(Dataset):
         
         # Create bags
         self.bags = self._create_bags()
+    
+    def get_training_bags_indices(self):
+        """Get the indices used in training bags for channel stats calculation."""
+        train_bags = []
+        for bag in self.bags:
+            train_bags.append(bag['indices'])
+        return train_bags
     
     def _load_images_from_path(self, path, label_mapping):
         """Load images and labels from directory structure."""
@@ -423,7 +480,8 @@ class MIFCMSingleImageDataset(Dataset):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
-        self.transform = transform if transform else self._get_default_transform()
+        # Initially set transform to None for dynamic calculation
+        self.transform = transform
         
         # Build path to dataset
         dataset_path = os.path.join(root, "dataset_preprocessed_mokushi_screening_3classes_train_test")
@@ -557,7 +615,8 @@ class HumanSomaticSmallBagDataset(Dataset):
     
     def __init__(self, root='./data', split='train', bag_size=5, transform=None):
         self.bag_size = bag_size
-        self.transform = transform if transform else self._get_default_transform(split == 'train')
+        # Initially set transform to None for dynamic calculation
+        self.transform = transform
         
         # Build path to dataset - same structure as llp_vat
         self.root = root
@@ -583,6 +642,13 @@ class HumanSomaticSmallBagDataset(Dataset):
         
         # Create bags
         self.bags = self._create_bags()
+    
+    def get_training_bags_indices(self):
+        """Get the indices used in training bags for channel stats calculation."""
+        train_bags = []
+        for bag in self.bags:
+            train_bags.append(bag['indices'])
+        return train_bags
         
     def _get_default_transform(self, train):
         if train:
@@ -679,7 +745,8 @@ class HumanSomaticSmallSingleImageDataset(Dataset):
     """Human Somatic Small dataset for single image evaluation."""
     
     def __init__(self, root='./data', split='test', transform=None):
-        self.transform = transform if transform else self._get_default_transform()
+        # Initially set transform to None for dynamic calculation
+        self.transform = transform
         
         self.data = []
         self.targets = []

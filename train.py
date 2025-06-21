@@ -3,13 +3,14 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Subset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
+import torchvision.transforms as transforms
 import os
 from tqdm import tqdm
 import numpy as np
 import time
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter
+from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_bags
 from collections import Counter
 
 
@@ -385,6 +386,29 @@ def train(config, log_dir=None):
             shuffle=True
         ).dataset
         
+        # Calculate channel statistics from training bags only
+        train_bags_indices = full_bag_dataset.get_training_bags_indices()
+        channel_stats = compute_channel_stats_from_bags(full_bag_dataset, train_bags_indices)
+        print("Channel stats:", channel_stats)
+        
+        # Create transforms with calculated statistics
+        transform_train = transforms.Compose([
+            transforms.Resize(64),
+            transforms.RandomCrop(64, padding=8),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(**channel_stats)
+        ])
+        
+        transform_test = transforms.Compose([
+            transforms.Resize(64),
+            transforms.ToTensor(),
+            transforms.Normalize(**channel_stats)
+        ])
+        
+        # Override dataset transforms
+        full_bag_dataset.transform = transform_train
+        
         # Split bags for training and validation using unified splitter
         train_idx, val_idx = DatasetSplitter.split_indices(
             len(full_bag_dataset), 
@@ -430,6 +454,9 @@ def train(config, log_dir=None):
             shuffle=False
         ).dataset
         
+        # Override single image dataset transform
+        mifcm_single_dataset.transform = transform_test
+        
         val_single_dataset = Subset(mifcm_single_dataset, val_single_images)
         
         val_loader = DataLoader(
@@ -448,6 +475,9 @@ def train(config, log_dir=None):
             shuffle=False
         )
         
+        # Override test dataset transform
+        test_loader.dataset.transform = transform_test
+        
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_mifcm_single_image_dataloader(
             root=config['data_root'],
@@ -455,6 +485,9 @@ def train(config, log_dir=None):
             batch_size=100,
             shuffle=False
         )
+        
+        # Override train instance dataset transform
+        train_instance_loader.dataset.transform = transform_test
     elif config.get('dataset') == 'human_somatic_small':
         # For human_somatic_small, use pre-split validation as in llp_vat
         train_loader = get_human_somatic_small_bag_dataloader(
@@ -465,12 +498,36 @@ def train(config, log_dir=None):
             shuffle=True
         )
         
+        # Calculate channel statistics from training bags only
+        train_bags_indices = train_loader.dataset.get_training_bags_indices()
+        channel_stats = compute_channel_stats_from_bags(train_loader.dataset, train_bags_indices)
+        print("Channel stats:", channel_stats)
+        
+        # Create transforms with calculated statistics
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(128, padding=16),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(**channel_stats)
+        ])
+        
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(**channel_stats)
+        ])
+        
+        # Override dataset transforms
+        train_loader.dataset.transform = transform_train
+        
         val_loader = get_human_somatic_small_single_image_dataloader(
             root=config['data_root'],
             split='val',
             batch_size=100,
             shuffle=False
         )
+        
+        # Override validation dataset transform
+        val_loader.dataset.transform = transform_test
         
         # Create test loader for final evaluation
         test_loader = get_human_somatic_small_single_image_dataloader(
@@ -480,6 +537,9 @@ def train(config, log_dir=None):
             shuffle=False
         )
         
+        # Override test dataset transform
+        test_loader.dataset.transform = transform_test
+        
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_human_somatic_small_single_image_dataloader(
             root=config['data_root'],
@@ -487,6 +547,9 @@ def train(config, log_dir=None):
             batch_size=100,
             shuffle=False
         )
+        
+        # Override train instance dataset transform
+        train_instance_loader.dataset.transform = transform_test
     else:
         # Create full bag dataset and split for training/validation
         full_bag_dataset = get_bag_dataloader(
