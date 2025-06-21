@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 class BaseBagDataset(Dataset, ABC):
     """Base class for bag-level datasets with label proportions."""
     
-    def __init__(self, bag_size=5, transform=None):
+    def __init__(self, bag_size=8, transform=None):
         self.bag_size = bag_size
         self.transform = transform
         self.bags = []
