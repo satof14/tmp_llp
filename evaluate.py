@@ -65,7 +65,7 @@ def evaluate_model(model_path, config=None, device=None):
     all_logits = []
     
     with torch.no_grad():
-        for images, labels in tqdm(test_loader, desc='Evaluating', file=sys.__stdout__):
+        for images, labels in tqdm(test_loader, desc='Evaluating', file=sys.__stdout__, ncols=80):
             images = images.to(device)
             labels = labels.to(device)
             

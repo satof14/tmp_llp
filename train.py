@@ -280,7 +280,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
     total_loss = 0
     num_batches = 0
     
-    pbar = tqdm(dataloader, desc=f'Epoch {epoch}', file=sys.__stdout__)
+    pbar = tqdm(dataloader, desc=f'Epoch {epoch}', file=sys.__stdout__, ncols=80)
     for batch_idx, (images, proportions) in enumerate(pbar):
         images = images.to(device)
         proportions = proportions.to(device)
@@ -326,7 +326,7 @@ def evaluate(model, dataloader, device):
     total = 0
     
     with torch.no_grad():
-        for images, labels in tqdm(dataloader, desc='Evaluating', file=sys.__stdout__):
+        for images, labels in tqdm(dataloader, desc='Evaluating', file=sys.__stdout__, ncols=80):
             images = images.to(device)
             labels = labels.to(device)
             
