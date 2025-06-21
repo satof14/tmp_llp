@@ -111,23 +111,22 @@ class CIFAR10BagDataset(Dataset):
     """CIFAR-10 dataset for bag-level training with label proportions."""
     
     def __init__(self, root='./data', train=True, bag_size=5, transform=None, download=True, 
-                 train_indices=None, val_indices=None):
+                 indices=None):
         self.bag_size = bag_size
         self.transform = transform if transform else self._get_default_transform(train)
-        self.train_indices = train_indices
-        self.val_indices = val_indices
+        self.indices = indices
         
         # Load CIFAR-10 dataset
         self.cifar10 = torchvision.datasets.CIFAR10(
             root=root, train=train, download=download
         )
         
-        # Filter indices based on train/val split if provided
-        if train and train_indices is not None:
-            # Use only training indices for bag creation
-            self.available_indices = set(train_indices)
+        # Filter indices based on provided indices
+        if indices is not None:
+            # Use only provided indices for bag creation
+            self.available_indices = set(indices)
         else:
-            # Use all indices (for test or when no split is provided)
+            # Use all indices (when no indices are provided)
             self.available_indices = set(range(len(self.cifar10)))
         
         # Group indices by class (only available indices)
@@ -309,10 +308,10 @@ class CIFAR10SingleImageDataset(Dataset):
 
 
 def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2, 
-                       num_workers=4, shuffle=True, train_indices=None, val_indices=None):
+                       num_workers=4, shuffle=True, indices=None):
     """Get dataloader for bag-level training."""
     dataset = CIFAR10BagDataset(root=root, train=train, bag_size=bag_size, 
-                               train_indices=train_indices, val_indices=val_indices)
+                               indices=indices)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -344,13 +343,12 @@ class MIFCMBagDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='train', bag_size=5, transform=None, 
-                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None):
+                 val_split=0.2, random_seed=42, indices=None, channel_stats=None):
         self.bag_size = bag_size
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
-        self.train_indices = train_indices
-        self.val_indices = val_indices
+        self.indices = indices
         self.channel_stats = channel_stats
         self.transform = transform
         
@@ -370,12 +368,12 @@ class MIFCMBagDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            # For train split, use provided train_indices
+            # For train split, use provided indices
             if split == 'train':
-                if self.train_indices is None:
-                    raise ValueError("train_indices must be provided for train split")
-                self.data = [all_data[i] for i in self.train_indices]
-                self.targets = [all_targets[i] for i in self.train_indices]
+                if self.indices is None:
+                    raise ValueError("indices must be provided for train split")
+                self.data = [all_data[i] for i in self.indices]
+                self.targets = [all_targets[i] for i in self.indices]
             else:  # split == 'val'
                 # This should not be used for validation in the new setup
                 raise ValueError("MIFCMBagDataset should not be used for validation split")
@@ -532,12 +530,11 @@ class MIFCMSingleImageDataset(Dataset):
     """
     
     def __init__(self, root='./data', split='test', transform=None, 
-                 val_split=0.2, random_seed=42, train_indices=None, val_indices=None, channel_stats=None, max_samples=None):
+                 val_split=0.2, random_seed=42, indices=None, channel_stats=None, max_samples=None):
         self.split = split
         self.val_split = val_split
         self.random_seed = random_seed
-        self.train_indices = train_indices
-        self.val_indices = val_indices
+        self.indices = indices
         self.channel_stats = channel_stats
         self.max_samples = max_samples
         self.transform = transform
@@ -556,20 +553,11 @@ class MIFCMSingleImageDataset(Dataset):
             train_path = os.path.join(dataset_path, "train")
             all_data, all_targets = self._load_images_from_path(train_path, label_mapping)
             
-            if split == 'train':
-                if self.train_indices is None:
-                    raise ValueError("train_indices must be provided for train split")
+            if split in ['train', 'val']:
+                if self.indices is None:
+                    raise ValueError(f"indices must be provided for {split} split")
                 # Apply max_samples to indices first
-                indices_to_use = self.train_indices
-                if self.max_samples is not None and len(indices_to_use) > self.max_samples:
-                    indices_to_use = random.sample(indices_to_use, self.max_samples)
-                self.data = [all_data[i] for i in indices_to_use]
-                self.targets = [all_targets[i] for i in indices_to_use]
-            else:  # split == 'val'
-                if self.val_indices is None:
-                    raise ValueError("val_indices must be provided for val split")
-                # Apply max_samples to indices first
-                indices_to_use = self.val_indices
+                indices_to_use = self.indices
                 if self.max_samples is not None and len(indices_to_use) > self.max_samples:
                     indices_to_use = random.sample(indices_to_use, self.max_samples)
                 self.data = [all_data[i] for i in indices_to_use]
@@ -635,7 +623,7 @@ class MIFCMSingleImageDataset(Dataset):
 
 def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
                              num_workers=4, shuffle=True, val_split=0.2, random_seed=42,
-                             train_indices=None, val_indices=None, channel_stats=None):
+                             indices=None, channel_stats=None):
     """Get dataloader for MIFCM bag-level training.
     
     Args:
@@ -647,14 +635,12 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
         shuffle: Whether to shuffle the data
         val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
         random_seed: Random seed for reproducible train/val split
-        train_indices: Pre-computed training indices (optional)
-        val_indices: Pre-computed validation indices (optional)
+        indices: Pre-computed indices for the split (optional)
         channel_stats: Channel statistics for normalization (required)
     """
     dataset = MIFCMBagDataset(root=root, split=split, bag_size=bag_size, 
                               val_split=val_split, random_seed=random_seed,
-                              train_indices=train_indices, val_indices=val_indices,
-                              channel_stats=channel_stats)
+                              indices=indices, channel_stats=channel_stats)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -667,7 +653,7 @@ def get_mifcm_bag_dataloader(root='./data', split='train', bag_size=5, batch_siz
 
 def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=100, 
                                       num_workers=4, shuffle=False, val_split=0.2, random_seed=42,
-                                      train_indices=None, val_indices=None, channel_stats=None, max_samples=None):
+                                      indices=None, channel_stats=None, max_samples=None):
     """Get dataloader for MIFCM single image evaluation.
     
     Args:
@@ -678,15 +664,13 @@ def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=10
         shuffle: Whether to shuffle the data
         val_split: Fraction of train data to use for validation (only used when split='train' or 'val')
         random_seed: Random seed for reproducible train/val split
-        train_indices: Pre-computed training indices (optional)
-        val_indices: Pre-computed validation indices (optional)
+        indices: Pre-computed indices for the split (optional)
         channel_stats: Channel statistics for normalization (required)
         max_samples: Maximum number of samples to use (optional)
     """
     dataset = MIFCMSingleImageDataset(root=root, split=split, 
                                       val_split=val_split, random_seed=random_seed,
-                                      train_indices=train_indices, val_indices=val_indices,
-                                      channel_stats=channel_stats, max_samples=max_samples)
+                                      indices=indices, channel_stats=channel_stats, max_samples=max_samples)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

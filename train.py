@@ -432,8 +432,7 @@ def train(config, log_dir=None):
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
             shuffle=True,
-            train_indices=train_indices,
-            val_indices=val_indices,
+            indices=train_indices,
             channel_stats=channel_stats
         )
         
@@ -443,8 +442,7 @@ def train(config, log_dir=None):
             split='val',
             batch_size=100,
             shuffle=False,
-            train_indices=train_indices,
-            val_indices=val_indices,
+            indices=val_indices,
             channel_stats=channel_stats
         )
         
@@ -463,8 +461,7 @@ def train(config, log_dir=None):
             split='train',
             batch_size=100,
             shuffle=False,
-            train_indices=train_indices,
-            val_indices=val_indices,
+            indices=train_indices,
             channel_stats=channel_stats,
             max_samples=len(val_indices)
         )
@@ -569,8 +566,7 @@ def train(config, log_dir=None):
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
             shuffle=True,
-            train_indices=train_indices,
-            val_indices=val_indices
+            indices=train_indices
         )
         
         # For validation, create single-image loader from validation indices
