@@ -9,56 +9,6 @@ import os
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
-
-def compute_channel_stats_from_bags(dataset, bags):
-    """
-    Calculates per-channel mean and std from images in the given bags.
-    """
-    import numpy as np
-    from PIL import Image
-
-    print("Calculating channel statistics from provided bags of images...")
-
-    flat_indices = [idx for bag in bags for idx in bag]
-    if not flat_indices:
-        raise ValueError("No images found in the provided bags.")
-
-    sums = np.zeros(3, dtype=np.float64)
-    sums_sq = np.zeros(3, dtype=np.float64)
-    total_pixels = 0
-
-    for idx in flat_indices:
-        img_path = dataset.data[idx]
-        with Image.open(img_path) as img:
-            img = img.convert('RGB')
-            arr = np.array(img, dtype=np.float32) / 255.0
-        h, w, _ = arr.shape
-        sums += arr.sum(axis=(0,1))
-        sums_sq += (arr**2).sum(axis=(0,1))
-        total_pixels += h * w
-
-    print(f"[Calculating stats] Number of bags: {len(bags)}")
-    print(f"[Calculating stats] Number of images: {len(flat_indices)}")
-    print(f"[Calculating stats] Number of pixels: {total_pixels}")
-    print(f"[Calculating stats] Sum of pixel values per channel: {sums}")
-    print(f"[Calculating stats] Sum of squared pixel values per channel: {sums_sq}")
-
-    mean = sums / total_pixels
-    var  = sums_sq / total_pixels - mean**2
-
-    # clip negative variance due to floating point errors
-    var  = np.clip(var, 0, None)
-    std  = np.sqrt(var)
-    # avoid zero std channels to prevent division by zero
-    std = np.where(std == 0, 1e-6, std)
-
-    # cast to float32 for compatibility
-    return {
-        'mean': mean.astype(np.float32).tolist(),
-        'std' : std.astype(np.float32).tolist()
-    }
-
-
 def compute_channel_stats_from_indices(image_paths, indices):
     """
     Calculates per-channel mean and std from images at the given indices.

@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Subset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
-import torchvision.transforms as transforms
 import os
 from tqdm import tqdm
 import numpy as np
@@ -11,7 +9,7 @@ import time
 import sys
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_bags, compute_channel_stats_from_indices
+from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_indices
 from collections import Counter
 
 
@@ -585,35 +583,6 @@ def train(config, log_dir=None):
     
     # Print comprehensive dataset information
     print_dataset_info(train_loader, val_loader, test_loader, config)
-    
-    # Create subset of training data to match validation set size for fair comparison
-    # val_size = len(val_loader.dataset)
-    # if len(train_instance_loader.dataset) > val_size:
-    #     # Use train bags to create a subset that matches validation size
-    #     if config.get('dataset') == 'human_somatic_small' or config.get('dataset') == 'mifcm_3classes_newgate':
-    #         # For human_somatic_small and mifcm_3classes_newgate, use random subset
-    #         indices = torch.randperm(len(train_instance_loader.dataset))[:val_size]
-    #         subset_dataset = Subset(train_instance_loader.dataset, indices)
-    #     else:
-    #         # For other datasets, use images from training bags
-    #         train_single_images = []
-    #         for bag_idx in train_bags.indices:
-    #             bag = full_bag_dataset.bags[bag_idx]
-    #             train_single_images.extend(bag['indices'])
-            
-    #         # Limit to validation size
-    #         if len(train_single_images) > val_size:
-    #             train_single_images = train_single_images[:val_size]
-            
-    #         subset_dataset = Subset(train_instance_loader.dataset, train_single_images)
-        
-    #     train_instance_loader = DataLoader(
-    #         subset_dataset,
-    #         batch_size=100,
-    #         shuffle=False,
-    #         num_workers=4,
-    #         pin_memory=True
-    #     )
     
     # Create optimizer and loss function
     optimizer = build_optimizer(model, config)
