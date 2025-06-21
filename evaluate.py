@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
 
 from model import LLPAttentionModel
 from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader
@@ -64,7 +65,7 @@ def evaluate_model(model_path, config=None, device=None):
     all_logits = []
     
     with torch.no_grad():
-        for images, labels in tqdm(test_loader, desc='Evaluating'):
+        for images, labels in tqdm(test_loader, desc='Evaluating', file=sys.__stdout__):
             images = images.to(device)
             labels = labels.to(device)
             

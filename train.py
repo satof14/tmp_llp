@@ -8,6 +8,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 import time
+import sys
 
 from model import LLPAttentionModel
 from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_bags, compute_channel_stats_from_indices
@@ -279,7 +280,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch, writer=N
     total_loss = 0
     num_batches = 0
     
-    pbar = tqdm(dataloader, desc=f'Epoch {epoch}')
+    pbar = tqdm(dataloader, desc=f'Epoch {epoch}', file=sys.__stdout__)
     for batch_idx, (images, proportions) in enumerate(pbar):
         images = images.to(device)
         proportions = proportions.to(device)
@@ -325,7 +326,7 @@ def evaluate(model, dataloader, device):
     total = 0
     
     with torch.no_grad():
-        for images, labels in tqdm(dataloader, desc='Evaluating'):
+        for images, labels in tqdm(dataloader, desc='Evaluating', file=sys.__stdout__):
             images = images.to(device)
             labels = labels.to(device)
             
