@@ -31,21 +31,14 @@ def evaluate_model(model_path, config=None, device=None):
     # Load channel stats for MIFCM and Human Somatic Small datasets
     channel_stats = None
     if config.get('dataset') in ['mifcm_3classes_newgate', 'human_somatic_small']:
-        channel_stats_path = os.path.join(model_path, 'channel_stats.json')
+        # channel_stats.json is in the results directory
+        channel_stats_path = os.path.join(os.path.dirname(model_path), 'channel_stats.json')
         if os.path.exists(channel_stats_path):
             with open(channel_stats_path, 'r') as f:
                 channel_stats = json.load(f)
             print(f"Loaded channel stats from: {channel_stats_path}")
         else:
-            print(f"Warning: channel_stats.json not found at {channel_stats_path}")
-            # Try to find it in the results directory
-            alt_channel_stats_path = os.path.join(os.path.dirname(model_path), 'channel_stats.json')
-            if os.path.exists(alt_channel_stats_path):
-                with open(alt_channel_stats_path, 'r') as f:
-                    channel_stats = json.load(f)
-                print(f"Loaded channel stats from: {alt_channel_stats_path}")
-            else:
-                raise ValueError(f"channel_stats.json not found. Expected at {channel_stats_path}")
+            raise ValueError(f"channel_stats.json not found. Expected at {channel_stats_path}")
     
     # Create model
     if config.get('dataset') == 'mifcm_3classes_newgate':
