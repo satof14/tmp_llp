@@ -11,7 +11,11 @@ import os
 import json
 
 from model import LLPAttentionModel
-from dataset import get_cifar_single_image_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_single_image_dataloader
+from datasets import (
+    get_cifar_single_image_dataloader,
+    get_mifcm_single_image_dataloader,
+    get_human_somatic_small_single_image_dataloader
+)
 
 
 def evaluate_model(model_path, config=None, device=None):
