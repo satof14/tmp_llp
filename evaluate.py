@@ -8,6 +8,7 @@ import seaborn as sns
 import sys
 import argparse
 import os
+import json
 
 from model import LLPAttentionModel
 from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader
@@ -94,7 +95,7 @@ def evaluate_model(model_path, config=None, device=None):
         class_names = ['G1', 'S', 'G2']
     else:
         class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
-                       'dog', 'frog', 'horse', 'ship', 'truck']
+                       'dog', 'frog', 'horse', 'ship', 'truck'][:config['num_classes']]
     
     print('\nClassification Report:')
     print(classification_report(all_labels, all_predictions, 
@@ -109,7 +110,10 @@ def evaluate_model(model_path, config=None, device=None):
     plt.xlabel('Predicted')
     plt.ylabel('True')
     plt.tight_layout()
-    plt.savefig('confusion_matrix.png')
+    # Save confusion matrix to results directory
+    cm_path = os.path.join(args.results_dir, 'confusion_matrix_eval.png')
+    plt.savefig(cm_path)
+    print(f'\nConfusion matrix saved to: {cm_path}')
     plt.close()
     
     # Per-class accuracy
@@ -131,7 +135,7 @@ def evaluate_model(model_path, config=None, device=None):
     }
 
 
-def analyze_predictions(results, num_examples=10):
+def analyze_predictions(results, config, num_examples=10):
     """Analyze model predictions and show examples of errors."""
     predictions = results['predictions']
     labels = results['labels']
@@ -146,8 +150,11 @@ def analyze_predictions(results, num_examples=10):
         
         # Show some examples
         print(f'\nShowing {min(num_examples, len(misclassified_indices))} misclassified examples:')
-        class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
-                       'dog', 'frog', 'horse', 'ship', 'truck']
+        if config.get('dataset') == 'mifcm_3classes_newgate':
+            class_names = ['G1', 'S', 'G2']
+        else:
+            class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
+                           'dog', 'frog', 'horse', 'ship', 'truck'][:config['num_classes']]
         
         for i in range(min(num_examples, len(misclassified_indices))):
             idx = misclassified_indices[i]
@@ -162,10 +169,20 @@ def analyze_predictions(results, num_examples=10):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate a trained LLP model')
     parser.add_argument('--results_dir', type=str, required=True,
-                        help='Path to the results directory containing the model checkpoint')
+                        help='Path to the results directory containing the model checkpoint and config.json')
     parser.add_argument('--checkpoint', type=str, default='best_model.pth',
                         help='Name of the checkpoint file (default: best_model.pth)')
     args = parser.parse_args()
+    
+    # Load config.json from results directory
+    config_path = os.path.join(args.results_dir, 'config.json')
+    if not os.path.exists(config_path):
+        print(f"Error: config.json not found at {config_path}")
+        sys.exit(1)
+    
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    print(f"Loaded config from: {config_path}")
     
     # Construct full model path
     model_path = os.path.join(args.results_dir, args.checkpoint)
@@ -177,7 +194,7 @@ if __name__ == '__main__':
     
     # Evaluate the model
     print(f"Evaluating model: {model_path}")
-    results = evaluate_model(model_path)
+    results = evaluate_model(model_path, config=config)
     
     # Analyze predictions
-    analyze_predictions(results)
+    analyze_predictions(results, config)
