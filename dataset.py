@@ -59,6 +59,60 @@ def compute_channel_stats_from_bags(dataset, bags):
     }
 
 
+def compute_channel_stats_from_indices(image_paths, indices):
+    """
+    Calculates per-channel mean and std from images at the given indices.
+    
+    Args:
+        image_paths: List of all image paths
+        indices: List of indices to compute stats from (e.g., training indices)
+    
+    Returns:
+        Dictionary with 'mean' and 'std' lists for RGB channels
+    """
+    import numpy as np
+    from PIL import Image
+
+    print("Calculating channel statistics from training indices...")
+
+    if not indices:
+        raise ValueError("No indices provided for channel statistics calculation.")
+
+    sums = np.zeros(3, dtype=np.float64)
+    sums_sq = np.zeros(3, dtype=np.float64)
+    total_pixels = 0
+
+    for idx in indices:
+        img_path = image_paths[idx]
+        with Image.open(img_path) as img:
+            img = img.convert('RGB')
+            arr = np.array(img, dtype=np.float32) / 255.0
+        h, w, _ = arr.shape
+        sums += arr.sum(axis=(0,1))
+        sums_sq += (arr**2).sum(axis=(0,1))
+        total_pixels += h * w
+
+    print(f"[Calculating stats] Number of training images: {len(indices)}")
+    print(f"[Calculating stats] Number of pixels: {total_pixels}")
+    print(f"[Calculating stats] Sum of pixel values per channel: {sums}")
+    print(f"[Calculating stats] Sum of squared pixel values per channel: {sums_sq}")
+
+    mean = sums / total_pixels
+    var  = sums_sq / total_pixels - mean**2
+
+    # clip negative variance due to floating point errors
+    var  = np.clip(var, 0, None)
+    std  = np.sqrt(var)
+    # avoid zero std channels to prevent division by zero
+    std = np.where(std == 0, 1e-6, std)
+
+    # cast to float32 for compatibility
+    return {
+        'mean': mean.astype(np.float32).tolist(),
+        'std' : std.astype(np.float32).tolist()
+    }
+
+
 class DatasetSplitter:
     """Unified dataset splitter for train/validation splits."""
     

@@ -10,7 +10,7 @@ import numpy as np
 import time
 
 from model import LLPAttentionModel
-from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_bags
+from dataset import get_bag_dataloader, get_single_image_dataloader, get_mifcm_bag_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_bag_dataloader, get_human_somatic_small_single_image_dataloader, DatasetSplitter, compute_channel_stats_from_bags, compute_channel_stats_from_indices
 from collections import Counter
 
 
@@ -412,6 +412,10 @@ def train(config, log_dir=None):
         print(f"Total training images: {len(all_data)}")
         print(f"Train split: {len(train_indices)} images")
         print(f"Valid split: {len(val_indices)} images")
+
+        # Calculate channel statistics from training indices only
+        channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
+        print("Channel stats:", channel_stats)
         
         # Create train and validation bag datasets using pre-split indices
         train_bag_dataset = get_mifcm_bag_dataloader(
@@ -433,11 +437,6 @@ def train(config, log_dir=None):
             train_indices=train_indices,
             val_indices=val_indices
         ).dataset
-        
-        # Calculate channel statistics from training bags only
-        train_bags_indices = train_bag_dataset.get_training_bags_indices()
-        channel_stats = compute_channel_stats_from_bags(train_bag_dataset, train_bags_indices)
-        print("Channel stats:", channel_stats)
         
         # Create transforms with calculated statistics
         transform_train = transforms.Compose([
