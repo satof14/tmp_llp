@@ -466,7 +466,6 @@ class MIFCMBagDataset(Dataset):
             
         if is_train:
             return transforms.Compose([
-                transforms.Resize(64),
                 transforms.RandomCrop(64, padding=8),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
@@ -474,7 +473,6 @@ class MIFCMBagDataset(Dataset):
             ])
         else:
             return transforms.Compose([
-                transforms.Resize(64),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std)
             ])
@@ -636,7 +634,6 @@ class MIFCMSingleImageDataset(Dataset):
         std = self.channel_stats['std']
         
         return transforms.Compose([
-            transforms.Resize(64),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)
         ])
