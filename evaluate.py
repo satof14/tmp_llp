@@ -11,7 +11,7 @@ import os
 import json
 
 from model import LLPAttentionModel
-from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader
+from dataset import get_single_image_dataloader, get_mifcm_single_image_dataloader, get_human_somatic_small_single_image_dataloader
 
 
 def evaluate_model(model_path, config=None, device=None):
@@ -28,8 +28,32 @@ def evaluate_model(model_path, config=None, device=None):
     if config is None:
         config = checkpoint['config']
     
+    # Load channel stats for MIFCM and Human Somatic Small datasets
+    channel_stats = None
+    if config.get('dataset') in ['mifcm_3classes_newgate', 'human_somatic_small']:
+        channel_stats_path = os.path.join(config['data_root'], 'channel_stats', 'channel_stats.json')
+        if os.path.exists(channel_stats_path):
+            with open(channel_stats_path, 'r') as f:
+                channel_stats = json.load(f)
+            print(f"Loaded channel stats from: {channel_stats_path}")
+        else:
+            print(f"Warning: channel_stats.json not found at {channel_stats_path}")
+            # Try to find it in the results directory
+            alt_channel_stats_path = os.path.join(os.path.dirname(model_path), 'channel_stats.json')
+            if os.path.exists(alt_channel_stats_path):
+                with open(alt_channel_stats_path, 'r') as f:
+                    channel_stats = json.load(f)
+                print(f"Loaded channel stats from: {alt_channel_stats_path}")
+            else:
+                raise ValueError(f"channel_stats.json not found. Expected at {channel_stats_path}")
+    
     # Create model
-    img_size = 64 if config.get('dataset') == 'mifcm_3classes_newgate' else 32
+    if config.get('dataset') == 'mifcm_3classes_newgate':
+        img_size = 64
+    elif config.get('dataset') == 'human_somatic_small':
+        img_size = 128
+    else:
+        img_size = 32
     model = LLPAttentionModel(
         img_size=img_size,
         patch_size=config['patch_size'],
@@ -52,7 +76,16 @@ def evaluate_model(model_path, config=None, device=None):
             root=config['data_root'],
             split='test',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            channel_stats=channel_stats
+        )
+    elif config.get('dataset') == 'human_somatic_small':
+        test_loader = get_human_somatic_small_single_image_dataloader(
+            root=config['data_root'],
+            split='test',
+            batch_size=100,
+            shuffle=False,
+            channel_stats=channel_stats
         )
     else:
         test_loader = get_single_image_dataloader(
@@ -93,6 +126,8 @@ def evaluate_model(model_path, config=None, device=None):
     # Classification report
     if config.get('dataset') == 'mifcm_3classes_newgate':
         class_names = ['G1', 'S', 'G2']
+    elif config.get('dataset') == 'human_somatic_small':
+        class_names = ['class_0', 'class_1', 'class_2']  # Update with actual class names if known
     else:
         class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
                        'dog', 'frog', 'horse', 'ship', 'truck'][:config['num_classes']]
@@ -152,6 +187,8 @@ def analyze_predictions(results, config, num_examples=10):
         print(f'\nShowing {min(num_examples, len(misclassified_indices))} misclassified examples:')
         if config.get('dataset') == 'mifcm_3classes_newgate':
             class_names = ['G1', 'S', 'G2']
+        elif config.get('dataset') == 'human_somatic_small':
+            class_names = ['class_0', 'class_1', 'class_2']  # Update with actual class names if known
         else:
             class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 
                            'dog', 'frog', 'horse', 'ship', 'truck'][:config['num_classes']]
