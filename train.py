@@ -522,68 +522,50 @@ def train(config, log_dir=None):
         # Override train instance dataset transform
         train_instance_loader.dataset.transform = transform_test
     else:
-        # Create full bag dataset and split for training/validation
-        full_bag_dataset = get_bag_dataloader(
+        # For CIFAR-10, first load all training data to get indices for train/valid split
+        import torchvision.datasets as datasets
+        
+        # Load all training data to get labels for stratified split
+        full_cifar_dataset = datasets.CIFAR10(
+            root=config['data_root'],
+            train=True,
+            download=True
+        )
+        
+        # Get all targets for stratified split
+        all_targets = full_cifar_dataset.targets
+        
+        # Split indices for train/validation using unified splitter
+        train_indices, val_indices = DatasetSplitter.split_indices(
+            len(full_cifar_dataset), 
+            config.get('valid_ratio', 0.1), 
+            config.get('seed', 42),
+            stratify=all_targets
+        )
+        DatasetSplitter.verify_no_overlap(train_indices, val_indices)
+        
+        print(f"Total CIFAR-10 training images: {len(full_cifar_dataset)}")
+        print(f"Train split: {len(train_indices)} images")
+        print(f"Valid split: {len(val_indices)} images")
+        
+        # Create train bag dataloader directly using train_indices
+        train_loader = get_bag_dataloader(
             root=config['data_root'],
             train=True,
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
-            shuffle=True
-        ).dataset
-        
-        # Split bags for training and validation using unified splitter
-        train_idx, val_idx = DatasetSplitter.split_indices(
-            len(full_bag_dataset), 
-            config.get('valid_ratio', 0.1), 
-            config.get('seed', 42)
-        )
-        DatasetSplitter.verify_no_overlap(train_idx, val_idx)
-        
-        train_bags = Subset(full_bag_dataset, train_idx)
-        valid_bags = Subset(full_bag_dataset, val_idx)
-        
-        # Create train loader from training bags
-        train_loader = DataLoader(
-            train_bags,
-            batch_size=config['mini_batch_size'],
             shuffle=True,
-            num_workers=4,
-            pin_memory=True
+            train_indices=train_indices,
+            val_indices=val_indices
         )
         
-        # For validation, create single-image loader from validation bags
-        val_single_images = []
-        val_single_labels = []
-        for bag_idx in valid_bags.indices:
-            bag = full_bag_dataset.bags[bag_idx]
-            val_single_images.extend(bag['indices'])
-            val_single_labels.extend(bag['labels'])
-        
-        # Collect training indices for overlap check
-        train_single_images_for_check = []
-        for bag_idx in train_bags.indices:
-            bag = full_bag_dataset.bags[bag_idx]
-            train_single_images_for_check.extend(bag['indices'])
-        
-        # Check for overlap between train and validation sets
-        DatasetSplitter.verify_no_overlap(train_single_images_for_check, val_single_images)
-        
-        # Create single image dataset and subset it
-        cifar_single_dataset = get_single_image_dataloader(
+        # For validation, create single-image loader from validation indices
+        val_loader = get_single_image_dataloader(
             root=config['data_root'],
             train=True,
             batch_size=100,
-            shuffle=False
-        ).dataset
-        
-        val_single_dataset = Subset(cifar_single_dataset, val_single_images)
-        
-        val_loader = DataLoader(
-            val_single_dataset,
-            batch_size=100,
             shuffle=False,
-            num_workers=4,
-            pin_memory=True
+            indices=val_indices
         )
         
         # Create test loader for final evaluation
@@ -599,40 +581,41 @@ def train(config, log_dir=None):
             root=config['data_root'],
             train=True,
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            indices=train_indices
         )
     
     # Print comprehensive dataset information
     print_dataset_info(train_loader, val_loader, test_loader, config)
     
     # Create subset of training data to match validation set size for fair comparison
-    val_size = len(val_loader.dataset)
-    if len(train_instance_loader.dataset) > val_size:
-        # Use train bags to create a subset that matches validation size
-        if config.get('dataset') == 'human_somatic_small' or config.get('dataset') == 'mifcm_3classes_newgate':
-            # For human_somatic_small and mifcm_3classes_newgate, use random subset
-            indices = torch.randperm(len(train_instance_loader.dataset))[:val_size]
-            subset_dataset = Subset(train_instance_loader.dataset, indices)
-        else:
-            # For other datasets, use images from training bags
-            train_single_images = []
-            for bag_idx in train_bags.indices:
-                bag = full_bag_dataset.bags[bag_idx]
-                train_single_images.extend(bag['indices'])
+    # val_size = len(val_loader.dataset)
+    # if len(train_instance_loader.dataset) > val_size:
+    #     # Use train bags to create a subset that matches validation size
+    #     if config.get('dataset') == 'human_somatic_small' or config.get('dataset') == 'mifcm_3classes_newgate':
+    #         # For human_somatic_small and mifcm_3classes_newgate, use random subset
+    #         indices = torch.randperm(len(train_instance_loader.dataset))[:val_size]
+    #         subset_dataset = Subset(train_instance_loader.dataset, indices)
+    #     else:
+    #         # For other datasets, use images from training bags
+    #         train_single_images = []
+    #         for bag_idx in train_bags.indices:
+    #             bag = full_bag_dataset.bags[bag_idx]
+    #             train_single_images.extend(bag['indices'])
             
-            # Limit to validation size
-            if len(train_single_images) > val_size:
-                train_single_images = train_single_images[:val_size]
+    #         # Limit to validation size
+    #         if len(train_single_images) > val_size:
+    #             train_single_images = train_single_images[:val_size]
             
-            subset_dataset = Subset(train_instance_loader.dataset, train_single_images)
+    #         subset_dataset = Subset(train_instance_loader.dataset, train_single_images)
         
-        train_instance_loader = DataLoader(
-            subset_dataset,
-            batch_size=100,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True
-        )
+    #     train_instance_loader = DataLoader(
+    #         subset_dataset,
+    #         batch_size=100,
+    #         shuffle=False,
+    #         num_workers=4,
+    #         pin_memory=True
+    #     )
     
     # Create optimizer and loss function
     optimizer = build_optimizer(model, config)

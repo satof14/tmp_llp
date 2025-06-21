@@ -160,19 +160,31 @@ class DatasetSplitter:
 class CIFAR10BagDataset(Dataset):
     """CIFAR-10 dataset for bag-level training with label proportions."""
     
-    def __init__(self, root='./data', train=True, bag_size=5, transform=None, download=True):
+    def __init__(self, root='./data', train=True, bag_size=5, transform=None, download=True, 
+                 train_indices=None, val_indices=None):
         self.bag_size = bag_size
         self.transform = transform if transform else self._get_default_transform(train)
+        self.train_indices = train_indices
+        self.val_indices = val_indices
         
         # Load CIFAR-10 dataset
         self.cifar10 = torchvision.datasets.CIFAR10(
             root=root, train=train, download=download
         )
         
-        # Group indices by class
+        # Filter indices based on train/val split if provided
+        if train and train_indices is not None:
+            # Use only training indices for bag creation
+            self.available_indices = set(train_indices)
+        else:
+            # Use all indices (for test or when no split is provided)
+            self.available_indices = set(range(len(self.cifar10)))
+        
+        # Group indices by class (only available indices)
         self.class_indices = defaultdict(list)
         for idx, (_, label) in enumerate(self.cifar10):
-            self.class_indices[label].append(idx)
+            if idx in self.available_indices:
+                self.class_indices[label].append(idx)
             
         # Convert to lists for easier access
         self.class_indices = {k: list(v) for k, v in self.class_indices.items()}
@@ -292,11 +304,20 @@ class CIFAR10BagDataset(Dataset):
 class CIFAR10SingleImageDataset(Dataset):
     """CIFAR-10 dataset for single image evaluation."""
     
-    def __init__(self, root='./data', train=False, transform=None, download=True):
+    def __init__(self, root='./data', train=False, transform=None, download=True, indices=None):
         self.transform = transform if transform else self._get_default_transform()
+        self.indices = indices
+        
+        # Load full CIFAR-10 dataset
         self.cifar10 = torchvision.datasets.CIFAR10(
             root=root, train=train, download=download, transform=self.transform
         )
+        
+        # If indices are provided, create a mapping
+        if indices is not None:
+            self.data_indices = indices
+        else:
+            self.data_indices = list(range(len(self.cifar10)))
         
     def _get_default_transform(self):
         return transforms.Compose([
@@ -305,19 +326,22 @@ class CIFAR10SingleImageDataset(Dataset):
         ])
     
     def __len__(self):
-        return len(self.cifar10)
+        return len(self.data_indices)
     
     def __getitem__(self, idx):
-        img, label = self.cifar10[idx]
+        # Map to actual CIFAR-10 index
+        actual_idx = self.data_indices[idx]
+        img, label = self.cifar10[actual_idx]
         # Add batch dimension to match bag format
         img = img.unsqueeze(0)  # (1, C, H, W)
         return img, label
 
 
 def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2, 
-                       num_workers=4, shuffle=True):
+                       num_workers=4, shuffle=True, train_indices=None, val_indices=None):
     """Get dataloader for bag-level training."""
-    dataset = CIFAR10BagDataset(root=root, train=train, bag_size=bag_size)
+    dataset = CIFAR10BagDataset(root=root, train=train, bag_size=bag_size, 
+                               train_indices=train_indices, val_indices=val_indices)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -329,9 +353,9 @@ def get_bag_dataloader(root='./data', train=True, bag_size=5, batch_size=2,
 
 
 def get_single_image_dataloader(root='./data', train=False, batch_size=100, 
-                                num_workers=4, shuffle=False):
+                                num_workers=4, shuffle=False, indices=None):
     """Get dataloader for single image evaluation."""
-    dataset = CIFAR10SingleImageDataset(root=root, train=train)
+    dataset = CIFAR10SingleImageDataset(root=root, train=train, indices=indices)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
