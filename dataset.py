@@ -722,8 +722,9 @@ def get_mifcm_single_image_dataloader(root='./data', split='test', batch_size=10
 class HumanSomaticSmallBagDataset(Dataset):
     """Human Somatic Small dataset for bag-level training with label proportions."""
     
-    def __init__(self, root='./data', split='train', bag_size=5, transform=None):
+    def __init__(self, root='./data', split='train', bag_size=5, transform=None, channel_stats=None):
         self.bag_size = bag_size
+        self.channel_stats = channel_stats
         # Initially set transform to None for dynamic calculation
         self.transform = transform
         
@@ -751,6 +752,10 @@ class HumanSomaticSmallBagDataset(Dataset):
         
         # Create bags
         self.bags = self._create_bags()
+        
+        # Set transform if not provided
+        if self.transform is None:
+            self.transform = self._get_default_transform(is_train=(split == 'train'))
     
     def get_training_bags_indices(self):
         """Get the indices used in training bags for channel stats calculation."""
@@ -759,18 +764,24 @@ class HumanSomaticSmallBagDataset(Dataset):
             train_bags.append(bag['indices'])
         return train_bags
         
-    def _get_default_transform(self, train):
-        if train:
+    def _get_default_transform(self, is_train):
+        if self.channel_stats is None:
+            raise ValueError("channel_stats must be provided")
+            
+        mean = self.channel_stats['mean']
+        std = self.channel_stats['std']
+            
+        if is_train:
             return transforms.Compose([
                 transforms.RandomCrop(128, padding=16),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
-                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                transforms.Normalize(mean, std)
             ])
         else:
             return transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                transforms.Normalize(mean, std)
             ])
 
     def _create_bags(self):
@@ -853,7 +864,8 @@ class HumanSomaticSmallBagDataset(Dataset):
 class HumanSomaticSmallSingleImageDataset(Dataset):
     """Human Somatic Small dataset for single image evaluation."""
     
-    def __init__(self, root='./data', split='test', transform=None):
+    def __init__(self, root='./data', split='test', transform=None, channel_stats=None):
+        self.channel_stats = channel_stats
         # Initially set transform to None for dynamic calculation
         self.transform = transform
         
@@ -869,10 +881,20 @@ class HumanSomaticSmallSingleImageDataset(Dataset):
                 self.data.append(img_path)
                 self.targets.append(int(label_idx))
         
+        # Set transform if not provided
+        if self.transform is None:
+            self.transform = self._get_default_transform()
+        
     def _get_default_transform(self):
+        if self.channel_stats is None:
+            raise ValueError("channel_stats must be provided")
+            
+        mean = self.channel_stats['mean']
+        std = self.channel_stats['std']
+        
         return transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+            transforms.Normalize(mean, std)
         ])
     
     def __len__(self):
@@ -891,9 +913,9 @@ class HumanSomaticSmallSingleImageDataset(Dataset):
 
 
 def get_human_somatic_small_bag_dataloader(root='./data', split='train', bag_size=5, batch_size=2, 
-                                           num_workers=4, shuffle=True):
+                                           num_workers=4, shuffle=True, channel_stats=None):
     """Get dataloader for Human Somatic Small bag-level training."""
-    dataset = HumanSomaticSmallBagDataset(root=root, split=split, bag_size=bag_size)
+    dataset = HumanSomaticSmallBagDataset(root=root, split=split, bag_size=bag_size, channel_stats=channel_stats)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
@@ -905,9 +927,9 @@ def get_human_somatic_small_bag_dataloader(root='./data', split='train', bag_siz
 
 
 def get_human_somatic_small_single_image_dataloader(root='./data', split='test', batch_size=100, 
-                                                    num_workers=4, shuffle=False):
+                                                    num_workers=4, shuffle=False, channel_stats=None):
     """Get dataloader for Human Somatic Small single image evaluation."""
-    dataset = HumanSomaticSmallSingleImageDataset(root=root, split=split)
+    dataset = HumanSomaticSmallSingleImageDataset(root=root, split=split, channel_stats=channel_stats)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,

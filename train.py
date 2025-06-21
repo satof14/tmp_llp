@@ -460,67 +460,64 @@ def train(config, log_dir=None):
             channel_stats=channel_stats
         )
     elif config.get('dataset') == 'human_somatic_small':
-        # For human_somatic_small, use pre-split validation as in llp_vat
+        # Load all training data to calculate channel statistics
+        from dataset import HumanSomaticSmallBagDataset
+        
+        # Load training data to get indices for channel statistics calculation
+        train_dataset_path = os.path.join(config['data_root'], 'train.txt')
+        all_data = []
+        
+        with open(train_dataset_path, 'r') as f:
+            for line in f:
+                rel_path, label_idx = line.strip().split()
+                img_path = os.path.join(config['data_root'], 'train', rel_path)
+                all_data.append(img_path)
+        
+        # All training images are used for channel statistics calculation
+        train_indices = list(range(len(all_data)))
+        
+        print(f"Total training images: {len(all_data)}")
+        
+        # Calculate channel statistics from training indices
+        channel_stats = compute_channel_stats_from_indices(all_data, train_indices)
+        print("Channel stats:", channel_stats)
+        
+        # Create train bag dataloader with channel stats
         train_loader = get_human_somatic_small_bag_dataloader(
             root=config['data_root'],
             split='train',
             bag_size=config['bag_size'],
             batch_size=config['mini_batch_size'],
-            shuffle=True
+            shuffle=True,
+            channel_stats=channel_stats
         )
         
-        # Calculate channel statistics from training bags only
-        train_bags_indices = train_loader.dataset.get_training_bags_indices()
-        channel_stats = compute_channel_stats_from_bags(train_loader.dataset, train_bags_indices)
-        print("Channel stats:", channel_stats)
-        
-        # Create transforms with calculated statistics
-        transform_train = transforms.Compose([
-            transforms.RandomCrop(128, padding=16),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(**channel_stats)
-        ])
-        
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(**channel_stats)
-        ])
-        
-        # Override dataset transforms
-        train_loader.dataset.transform = transform_train
-        
+        # Create validation single-image loader with channel stats
         val_loader = get_human_somatic_small_single_image_dataloader(
             root=config['data_root'],
             split='val',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            channel_stats=channel_stats
         )
         
-        # Override validation dataset transform
-        val_loader.dataset.transform = transform_test
-        
-        # Create test loader for final evaluation
+        # Create test loader for final evaluation with channel stats
         test_loader = get_human_somatic_small_single_image_dataloader(
             root=config['data_root'],
             split='test',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            channel_stats=channel_stats
         )
-        
-        # Override test dataset transform
-        test_loader.dataset.transform = transform_test
         
         # Create train instance-level dataloader for train accuracy evaluation
         train_instance_loader = get_human_somatic_small_single_image_dataloader(
             root=config['data_root'],
             split='train',
             batch_size=100,
-            shuffle=False
+            shuffle=False,
+            channel_stats=channel_stats
         )
-        
-        # Override train instance dataset transform
-        train_instance_loader.dataset.transform = transform_test
     else:
         # For CIFAR-10, first load all training data to get indices for train/valid split
         import torchvision.datasets as datasets
