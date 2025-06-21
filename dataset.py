@@ -145,6 +145,7 @@ class CIFAR10BagDataset(Dataset):
     def _get_default_transform(self, train):
         if train:
             return transforms.Compose([
+                # transforms.RandomResizedCrop(32, scale=(0.05, 1.0)),
                 transforms.RandomCrop(32, padding=4),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
