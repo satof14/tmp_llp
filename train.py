@@ -379,7 +379,8 @@ def train(config, log_dir=None):
         num_heads=config['num_heads'],
         num_layers=config['L'],
         mlp_ratio=config.get('mlp_ratio', 4.0),
-        dropout=config['dropout']
+        dropout=config['dropout'],
+        patch_embed_type=config.get('patch_embed_type', 'cct')
     ).to(device)
     
     # Create dataloaders with train/valid split

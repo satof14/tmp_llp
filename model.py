@@ -198,10 +198,10 @@ class LLPAttentionModel(nn.Module):
     
     def __init__(self, img_size=32, patch_size=4, in_channels=3, num_classes=10,
                  embed_dim=768, num_heads=12, num_layers=12, mlp_ratio=4.0, dropout=0.1,
-                 use_conv_tokenizer=True, conv_layers=2, kernel_size=3):
+                 patch_embed_type='cct', conv_layers=2, kernel_size=3):
         super().__init__()
         
-        if use_conv_tokenizer:
+        if patch_embed_type.lower() == 'cct':
             self.patch_embed = ConvolutionalTokenizer(
                 img_size=img_size, 
                 in_channels=in_channels, 
@@ -209,17 +209,21 @@ class LLPAttentionModel(nn.Module):
                 conv_layers=conv_layers,
                 kernel_size=kernel_size
             )
-        else:
+        elif patch_embed_type.lower() == 'linear':
             self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+        else:
+            raise ValueError(f"Unknown patch_embed_type: {patch_embed_type}. Must be 'cct' or 'linear'.")
         
         self.num_patches = self.patch_embed.num_patches
         
         # BAG_CLS token
         self.bag_cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         
+        # Store patch_embed_type for use in forward method
+        self.patch_embed_type = patch_embed_type.lower()
+        
         # Positional embeddings (optional for convolutional tokenizer)
-        self.use_pos_embed = not use_conv_tokenizer  # Disable for conv tokenizer by default
-        if self.use_pos_embed:
+        if self.patch_embed_type == 'linear':
             self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches + 1, embed_dim))
         else:
             self.register_parameter('pos_embed', None)
@@ -238,7 +242,7 @@ class LLPAttentionModel(nn.Module):
         
         # Initialize weights
         nn.init.trunc_normal_(self.bag_cls_token, std=0.02)
-        if self.use_pos_embed:
+        if self.patch_embed_type == 'linear':
             nn.init.trunc_normal_(self.pos_embed, std=0.02)
         self.apply(self._init_weights)
         
@@ -269,7 +273,7 @@ class LLPAttentionModel(nn.Module):
         x = torch.cat([bag_cls_tokens, x], dim=1)  # (B, 1 + num_images * num_patches, embed_dim)
         
         # Add positional embeddings (if enabled)
-        if self.use_pos_embed:
+        if self.patch_embed_type == 'linear':
             # For simplicity, we tile the positional embeddings for each image
             pos_embed = self.pos_embed[:, 1:, :].repeat(1, num_images, 1)
             pos_embed = torch.cat([self.pos_embed[:, :1, :], pos_embed], dim=1)

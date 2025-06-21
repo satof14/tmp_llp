@@ -62,6 +62,8 @@ def main():
                         help='Number of transformer layers (default: 6)')
     parser.add_argument('--mlp_ratio', type=float, default=4.0,
                         help='MLP ratio for transformer blocks (default: 4.0)')
+    parser.add_argument('--patch_embed_type', type=str, default='cct',
+                        help='Type of patch embedding: "cct" for Compact Convolutional Transformer or "linear" for Linear Projection (default: cct)')
     
     # Training arguments
     parser.add_argument('--bag_size', type=int, default=1,
@@ -152,7 +154,8 @@ def main():
         'momentum': args.momentum,
         'beta1': args.beta1,
         'beta2': args.beta2,
-        'eps': args.eps
+        'eps': args.eps,
+        'patch_embed_type': args.patch_embed_type
     }
     
     if args.mode == 'train':

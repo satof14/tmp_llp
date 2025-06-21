@@ -60,7 +60,8 @@ def evaluate_model(model_path, config=None, device=None):
         num_heads=config['num_heads'],
         num_layers=config['L'],
         mlp_ratio=config['mlp_ratio'],
-        dropout=0.1
+        dropout=0.1,
+        patch_embed_type=config.get('patch_embed_type', 'cct')
     ).to(device)
     
     # Load model weights
